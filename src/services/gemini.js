@@ -31,17 +31,22 @@ export const saveGeminiKey = (key) => {
   }
 }
 
-const toBase64 = async (imageUrl) => {
-  if (imageUrl.startsWith('data:')) return imageUrl.split(',')[1]
+const toImageData = async (imageUrl) => {
+  if (imageUrl.startsWith('data:')) {
+    const [header, data = ''] = imageUrl.split(',')
+    const mimeType = header.match(/^data:([^;]+)/)?.[1] ?? 'image/jpeg'
+    return { data, mimeType }
+  }
   const response = await fetch(imageUrl)
   if (!response.ok) throw new Error('Unable to load the image for analysis')
   const blob = await response.blob()
-  return new Promise((resolve, reject) => {
+  const data = await new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => resolve(String(reader.result).split(',')[1])
     reader.onerror = () => reject(new Error('Unable to read the image'))
     reader.readAsDataURL(blob)
   })
+  return { data, mimeType: blob.type || 'image/jpeg' }
 }
 
 const normalizeBoxes = (data) => {
@@ -55,7 +60,7 @@ export const analyzeBarnImage = async (imageUrl, apiKey = getGeminiKey()) => {
   if (!apiKey) throw new Error('Add a Gemini API key first')
   if (!imageUrl) throw new Error('No image available to analyze')
 
-  const base64 = await toBase64(imageUrl)
+  const { data: base64, mimeType } = await toImageData(imageUrl)
   const response = await fetch(`${ENDPOINT}?key=${encodeURIComponent(apiKey)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -64,7 +69,7 @@ export const analyzeBarnImage = async (imageUrl, apiKey = getGeminiKey()) => {
         {
           parts: [
             { text: BARN_DETECTION_PROMPT },
-            { inline_data: { mime_type: 'image/jpeg', data: base64 } },
+            { inline_data: { mime_type: mimeType, data: base64 } },
           ],
         },
       ],
@@ -95,6 +100,9 @@ export const analyzeBarnImage = async (imageUrl, apiKey = getGeminiKey()) => {
   }
 
   return normalizeBoxes(parsed).filter(
-    (item) => Array.isArray(item?.box_2d) && item.box_2d.length === 4,
+    (item) =>
+      Array.isArray(item?.box_2d) &&
+      item.box_2d.length === 4 &&
+      item.box_2d.every((value) => Number.isFinite(Number(value))),
   )
 }
