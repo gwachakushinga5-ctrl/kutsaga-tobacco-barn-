@@ -141,7 +141,7 @@ export const ScanSectorCard = ({
 
       <div className="mt-2.5 rounded-lg border border-emerald-500/15 bg-emerald-400/[0.035] px-1.5 py-1">
         <ToggleRow
-          label="Gemini-only detection"
+          label="Gemini + model together"
           checked={Boolean(geminiLocate)}
           onChange={onGeminiLocateChange}
           dotClass="bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.8)]"
@@ -151,7 +151,7 @@ export const ScanSectorCard = ({
         {geminiStatus || 'Gemini: not checked yet'}
       </p>
       <p className="mt-0.5 text-[8px] leading-relaxed text-slate-600">
-        On: model detections are hidden; only Gemini-confirmed barns enter the queue. Off: model detector only.
+        On: model detections and Gemini-confirmed barns both enter the queue. Off: model detector only.
       </p>
 
       <div className="mt-4 flex gap-2">

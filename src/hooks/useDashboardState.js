@@ -115,7 +115,7 @@ export const useDashboardState = () => {
   const [taxonomyOpen, setTaxonomyOpen] = useState(false)
   const [geminiLocate, setGeminiLocate] = useState(() => Boolean(getGeminiKey()))
   const [geminiStatus, setGeminiStatus] = useState(() =>
-    getGeminiKey() ? 'Gemini-only mode ready' : 'Model detector active (Gemini off)',
+    getGeminiKey() ? 'Gemini: key saved — ready' : 'Gemini: locate off',
   )
   const [exporting, setExporting] = useState(false)
   const [reviewing, setReviewing] = useState(false)
@@ -124,13 +124,8 @@ export const useDashboardState = () => {
   useEffect(() => {
     const onKeyChange = (event) => {
       const key = event.detail ?? ''
-      if (key) {
-        setGeminiLocate(true)
-        setGeminiStatus('Gemini-only mode ready')
-      } else {
-        setGeminiLocate(false)
-        setGeminiStatus('Model detector active (Gemini off)')
-      }
+      setGeminiLocate(Boolean(key))
+      setGeminiStatus(key ? 'Gemini: key saved — ready' : 'Gemini: locate off')
     }
     window.addEventListener('kutsaga:geminiKey', onKeyChange)
     return () => window.removeEventListener('kutsaga:geminiKey', onKeyChange)
@@ -142,38 +137,22 @@ export const useDashboardState = () => {
     setGeminiStatus(
       next
         ? getGeminiKey()
-          ? 'Gemini-only mode ready'
+          ? 'Gemini: key saved — ready'
           : 'Gemini: no API key — locate skipped'
-        : 'Model detector active (Gemini off)',
+        : 'Gemini: locate off',
     )
   }, [geminiLocate])
 
-  // Gemini-only mode: the model detector keeps running for scan bookkeeping,
-  // but its candidates are hidden. Only Gemini-confirmed barns reach the UI.
-  const scopedDetections = useMemo(() => {
+  const allDetections = useMemo(() => {
     const scope = activeTab === 'current' ? scanDetections : detections
-    return geminiLocate ? scope.filter((detection) => detection.source === 'gemini') : scope
-  }, [activeTab, detections, geminiLocate, scanDetections])
-
-  const allDetections = useMemo(
-    () => scopedDetections.filter((detection) => !dismissedIds.has(detection.id)),
-    [dismissedIds, scopedDetections],
-  )
+    return scope.filter((detection) => !dismissedIds.has(detection.id))
+  }, [activeTab, detections, dismissedIds, scanDetections])
 
   const counts = useMemo(() => {
-    const base = geminiLocate
-      ? {
-          waiting: scopedDetections.filter((item) => item.status === 'waiting').length,
-          approved: scopedDetections.filter((item) => item.status === 'approved').length,
-          rejected: scopedDetections.filter((item) => item.status === 'rejected').length,
-          uncertain: scopedDetections.filter((item) => item.status === 'uncertain').length,
-          total: scopedDetections.length,
-        }
-      : activeTab === 'current'
-        ? countsByScope.current
-        : countsByScope.global
+    const scope = activeTab === 'current' ? scanDetections : detections
+    const base = activeTab === 'current' ? countsByScope.current : countsByScope.global
     const adjusted = { ...base }
-    scopedDetections.forEach((detection) => {
+    scope.forEach((detection) => {
       if (!dismissedIds.has(detection.id)) return
       if (adjusted[detection.status] != null) {
         adjusted[detection.status] = Math.max(0, adjusted[detection.status] - 1)
@@ -183,7 +162,7 @@ export const useDashboardState = () => {
       }
     })
     return adjusted
-  }, [activeTab, countsByScope, dismissedIds, geminiLocate, scopedDetections])
+  }, [activeTab, countsByScope, detections, dismissedIds, scanDetections])
 
   const filteredDetections = useMemo(
     () =>
@@ -390,8 +369,8 @@ export const useDashboardState = () => {
         if (geminiLocate) {
           const apiKey = getGeminiKey()
           if (!apiKey) {
-            setGeminiStatus('Gemini: no API key — model detections hidden')
-            addToast('Gemini-only mode is on but no API key is saved', 'info')
+            setGeminiStatus('Gemini: no API key — locate skipped')
+            addToast('Gemini locate is on but no API key is saved', 'info')
           } else {
             setGeminiStatus('Gemini: checking candidate barns…')
             try {
@@ -424,24 +403,20 @@ export const useDashboardState = () => {
             }
           }
         } else {
-          setGeminiStatus('Model detector active (Gemini off)')
+          setGeminiStatus('Gemini: locate off')
         }
 
         setActiveTab('current')
         setStatusFilter('all')
         setScanStatus('IDLE')
 
-        const found = geminiLocate ? geminiCount : (job?.detected_complexes ?? 0) + geminiCount
+        const found = (job?.detected_complexes ?? 0) + geminiCount
         addToast(
-          geminiLocate
-            ? geminiCount
-              ? `Gemini confirmed ${geminiCount} barn${geminiCount === 1 ? '' : 's'}`
-              : 'Gemini found no confirmed barns in this scan'
-            : found
-              ? `${found} candidate structure${found === 1 ? '' : 's'} flagged for review${
-                  geminiCount ? ` (${geminiCount} by Gemini)` : ''
-                }`
-              : 'Scan complete — no detections returned. Inspect the imagery manually.',
+          found
+            ? `${found} candidate structure${found === 1 ? '' : 's'} flagged for review${
+                geminiCount ? ` (${geminiCount} by Gemini)` : ''
+              }`
+            : 'Scan complete — no detections returned. Inspect the imagery manually.',
           found ? 'success' : 'info',
         )
         return true
@@ -488,20 +463,16 @@ export const useDashboardState = () => {
 
   const removeAllDetections = useCallback(() => {
     const all = [...detections, ...scanDetections]
-    const visible = geminiLocate ? all.filter((item) => item.source === 'gemini') : all
-    if (!visible.length) return
+    if (!all.length) return
     setDismissedIds((current) => {
       const next = new Set(current)
-      visible.forEach((detection) => next.add(detection.id))
+      all.forEach((detection) => next.add(detection.id))
       persistDismissed(next)
       return next
     })
     setSelectedId(null)
-    addToast(
-      `${visible.length} barn${visible.length === 1 ? '' : 's'} removed from the approval queue`,
-      'info',
-    )
-  }, [addToast, detections, geminiLocate, scanDetections])
+    addToast(`${all.length} barn${all.length === 1 ? '' : 's'} removed from the approval queue`, 'info')
+  }, [addToast, detections, scanDetections])
 
   const resetFilters = useCallback(() => {
     setStatusFilter('all')
