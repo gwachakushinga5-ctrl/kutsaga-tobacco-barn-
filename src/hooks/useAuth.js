@@ -22,14 +22,17 @@ export const useAuth = () => {
         if (active) setReady(true)
         return
       }
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 12000)
       try {
-        const me = await fetchCurrentUser()
+        const me = await fetchCurrentUser(controller.signal)
         if (active) setUser(me)
       } catch {
         if (active) {
           setUser(API_KEY ? { username: 'api-key', role: 'api' } : null)
         }
       } finally {
+        clearTimeout(timeout)
         if (active) setReady(true)
       }
     }

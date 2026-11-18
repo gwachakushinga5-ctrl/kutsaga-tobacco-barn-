@@ -50,6 +50,15 @@ const sleep = (milliseconds) =>
 
 const clampThreshold = (value) => Math.min(0.95, Math.max(0.1, Number(value) || 0.65))
 
+const hasPointCoordinates = (feature) => {
+  const coordinates = feature?.geometry?.coordinates
+  return (
+    Array.isArray(coordinates) &&
+    Number.isFinite(coordinates[0]) &&
+    Number.isFinite(coordinates[1])
+  )
+}
+
 const downloadJson = (payload, filename) => {
   const blob = new Blob([JSON.stringify(payload, null, 2)], {
     type: 'application/json',
@@ -193,7 +202,9 @@ export const useDashboardState = () => {
   const loadCandidates = useCallback(
     async (params) => {
       const data = await getCandidates({ limit: CANDIDATE_LIMIT, ...params })
-      return (data?.features ?? []).map(candidateToDetection)
+      return (data?.features ?? [])
+        .filter((feature) => hasPointCoordinates(feature) && feature?.properties?.complex_id)
+        .map(candidateToDetection)
     },
     [],
   )
@@ -215,7 +226,11 @@ export const useDashboardState = () => {
 
         setDetections(globalList)
         setCountsByScope((current) => ({ ...current, global: globalCounts }))
-        setTrbRegistry((groundTruth?.features ?? []).map(groundTruthToTrb))
+        setTrbRegistry(
+          (groundTruth?.features ?? [])
+            .filter(hasPointCoordinates)
+            .map(groundTruthToTrb),
+        )
 
         const currentJobId = mostRecentJobId(globalList, jobId)
         if (currentJobId) {

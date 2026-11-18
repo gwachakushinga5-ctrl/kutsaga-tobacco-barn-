@@ -139,8 +139,8 @@ export const login = async (username, password) => {
   return data.user ?? { username }
 }
 
-export const fetchCurrentUser = async () => {
-  const user = await request('/api/v1/auth/me')
+export const fetchCurrentUser = async (signal) => {
+  const user = await request('/api/v1/auth/me', { signal })
   storeUser(user)
   return user
 }
