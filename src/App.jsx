@@ -313,9 +313,8 @@ const Dashboard = ({ user, onSignOut }) => {
             running={running}
             aoi={aoi}
             geminiLocate={dashboard.geminiLocate}
-            onGeminiLocateChange={() =>
-              dashboard.setGeminiLocate((current) => !current)
-            }
+            onGeminiLocateChange={dashboard.toggleGeminiLocate}
+            geminiStatus={dashboard.geminiStatus}
           />
           <ScanTelemetryCard
             telemetry={dashboard.telemetry}

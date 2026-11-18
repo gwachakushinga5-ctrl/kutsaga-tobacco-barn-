@@ -2,17 +2,29 @@ const KEY_STORAGE = 'kutsaga.geminiKey'
 const MODEL = 'gemini-2.5-flash'
 const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`
 
-export const BARN_DETECTION_PROMPT = `Analyze this top-down high-resolution satellite image of a rural agricultural area and locate all tobacco curing barns and large agricultural barn structures.
+export const BARN_DETECTION_PROMPT = `Analyze this top-down high-resolution satellite image of a rural agricultural area and locate ONLY clear tobacco curing barns and large agricultural barn structures.
 
-Visual cues to include:
-- Rectangular or elongated boxy structures, often arranged in neat rows, clusters, or batteries next to grading sheds and farm access tracks.
-- Distinct pitched or gable roofs (corrugated metal, asbestos, or dark weathered roofing) with visible shadow edges indicating tall vertical walls.
+Include only structures that are:
+- Rectangular or elongated boxy buildings, often in neat rows, clusters, or batteries next to grading sheds and farm tracks.
+- Clearly roofed with pitched or gable roofs (corrugated metal, asbestos, or dark weathered roofing) and visible tall-wall shadow edges.
+- At least about 8 metres long — do not count small sheds.
 
 Strict exclusions (do NOT detect):
 - Small circular thatched huts (rondavels), scattered village dwellings, or fenced residential homesteads.
-- Trees, bushes, water tanks, livestock kraals, or bare soil patches.
+- Small sheds, trees, bushes, water tanks, livestock kraals, vehicles, shadows, bare soil patches, or rectangular patterns that are not buildings.
+- Anything you are unsure about. If uncertain, omit it.
 
-Return tight, individual bounding boxes around each separate barn structure—do not group an entire cluster into one big box. Output strictly as a JSON list of objects with box_2d in [y_min, x_min, y_max, x_max] format (normalized 0-1000) and confidence (high, medium, or low).`
+Return tight, individual bounding boxes around each separate barn structure — never one box around a whole cluster. Output strictly as a JSON list of objects with:
+- box_2d: [y_min, x_min, y_max, x_max] normalized 0-1000
+- confidence: "high", "medium", or "low"
+- label: "barn"
+Return [] if there are no clear barns.`
+
+export const BARN_VERIFY_PROMPT = `Look at the EXACT CENTRE of this top-down satellite image. Is the structure at the centre a tobacco curing barn or a large agricultural barn?
+
+Answer true only if it is clearly a roofed barn building at least about 8 metres long. Answer false for houses, huts, small sheds, tanks, trees, kraals, vehicles, shadows, bare ground, or anything uncertain.
+
+Return strictly JSON: {"is_barn": true|false, "reason": "short reason", "confidence": "high"|"medium"|"low"}`
 
 export const getGeminiKey = () => {
   try {
@@ -23,11 +35,15 @@ export const getGeminiKey = () => {
 }
 
 export const saveGeminiKey = (key) => {
+  const next = key?.trim() ?? ''
   try {
-    if (key) localStorage.setItem(KEY_STORAGE, key.trim())
+    if (next) localStorage.setItem(KEY_STORAGE, next)
     else localStorage.removeItem(KEY_STORAGE)
   } catch {
     /* storage unavailable */
+  }
+  if (typeof window !== 'undefined' && window.dispatchEvent) {
+    window.dispatchEvent(new CustomEvent('kutsaga:geminiKey', { detail: next }))
   }
 }
 
@@ -49,14 +65,7 @@ const toImageData = async (imageUrl) => {
   return { data, mimeType: blob.type || 'image/jpeg' }
 }
 
-const normalizeBoxes = (data) => {
-  if (Array.isArray(data)) return data
-  if (Array.isArray(data?.boxes)) return data.boxes
-  if (Array.isArray(data?.detections)) return data.detections
-  return []
-}
-
-export const analyzeBarnImage = async (imageUrl, apiKey = getGeminiKey()) => {
+const requestJson = async (imageUrl, apiKey, prompt) => {
   if (!apiKey) throw new Error('Add a Gemini API key first')
   if (!imageUrl) throw new Error('No image available to analyze')
 
@@ -68,7 +77,7 @@ export const analyzeBarnImage = async (imageUrl, apiKey = getGeminiKey()) => {
       contents: [
         {
           parts: [
-            { text: BARN_DETECTION_PROMPT },
+            { text: prompt },
             { inline_data: { mime_type: mimeType, data: base64 } },
           ],
         },
@@ -89,20 +98,41 @@ export const analyzeBarnImage = async (imageUrl, apiKey = getGeminiKey()) => {
   }
 
   const data = await response.json()
-  const text = data?.candidates?.[0]?.content?.parts?.map((part) => part.text ?? '').join('') ?? ''
+  const text =
+    data?.candidates?.[0]?.content?.parts?.map((part) => part.text ?? '').join('') ?? ''
   if (!text) throw new Error('Gemini returned no analysis')
 
-  let parsed
   try {
-    parsed = JSON.parse(text)
+    return JSON.parse(text)
   } catch {
     throw new Error('Gemini returned an invalid JSON response')
   }
+}
 
+const normalizeBoxes = (data) => {
+  if (Array.isArray(data)) return data
+  if (Array.isArray(data?.boxes)) return data.boxes
+  if (Array.isArray(data?.detections)) return data.detections
+  return []
+}
+
+export const analyzeBarnImage = async (imageUrl, apiKey = getGeminiKey()) => {
+  const parsed = await requestJson(imageUrl, apiKey, BARN_DETECTION_PROMPT)
   return normalizeBoxes(parsed).filter(
     (item) =>
       Array.isArray(item?.box_2d) &&
       item.box_2d.length === 4 &&
-      item.box_2d.every((value) => Number.isFinite(Number(value))),
+      item.box_2d.every((value) => Number.isFinite(Number(value))) &&
+      (!item.label || String(item.label).toLowerCase().includes('barn')) &&
+      item.confidence !== 'low',
   )
+}
+
+export const verifyBarnAtCenter = async (imageUrl, apiKey = getGeminiKey()) => {
+  const parsed = await requestJson(imageUrl, apiKey, BARN_VERIFY_PROMPT)
+  return {
+    isBarn: parsed?.is_barn === true,
+    reason: typeof parsed?.reason === 'string' ? parsed.reason : '',
+    confidence: parsed?.confidence ?? 'low',
+  }
 }

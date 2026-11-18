@@ -1,7 +1,7 @@
-import { analyzeBarnImage } from '../services/gemini'
+import { analyzeBarnImage, verifyBarnAtCenter } from '../services/gemini'
 import {
   captureBoundsGrid,
-  captureCenteredGrid,
+  captureCenteredCrop,
   IMAGERY_TILE_SIZE,
 } from './imagery'
 import {
@@ -13,6 +13,8 @@ import {
 
 const CONFIDENCE_SCORE = { high: 0.92, medium: 0.72, low: 0.52 }
 const MAX_REFINEMENTS = 12
+const MIN_BARN_AREA = 25
+const MAX_BARN_AREA = 2500
 
 const normalizeBoxValue = (value) => {
   const number = Number(value)
@@ -62,7 +64,12 @@ const gridToLocation = (box, grid) => {
     { lat: bbox.north, lng: bbox.east },
     { lat: bbox.north, lng: bbox.west },
   ])
-  return { center, bbox, area, confidence: CONFIDENCE_SCORE[box.confidence] ?? CONFIDENCE_SCORE.low }
+  return {
+    center,
+    bbox,
+    area,
+    confidence: CONFIDENCE_SCORE[box.confidence] ?? CONFIDENCE_SCORE.low,
+  }
 }
 
 const nearestTrb = (lat, lng, registry) =>
@@ -74,7 +81,7 @@ const nearestTrb = (lat, lng, registry) =>
     { item: null, distance: Infinity },
   )
 
-const applyLocation = (detection, location, trbRegistry) => {
+const applyLocation = (detection, location, trbRegistry, verification) => {
   const match = nearestTrb(location.center.lat, location.center.lng, trbRegistry)
   const trbMatch = match.distance <= 55
   return {
@@ -85,35 +92,53 @@ const applyLocation = (detection, location, trbRegistry) => {
     area: location.area,
     confidence: location.confidence,
     priority: location.confidence,
+    status: 'waiting',
+    reviewStatus: null,
     trbState: trbMatch ? 'POSSIBLE_EXISTING_MATCH' : 'NO_MATCH',
     trbId: trbMatch ? match.item.id : null,
     trbName: trbMatch ? match.item.name : null,
     trbDistance: Number.isFinite(match.distance) ? match.distance : null,
     reviewBand: location.area < 35 ? 'SMALL_STRUCTURE_SCRUTINY' : 'STANDARD',
     small: location.area < 35,
+    geminiVerified: true,
+    geminiReason: verification?.reason ?? 'Confirmed barn at candidate centre',
   }
 }
 
+const verifyCandidate = async (detection, apiKey, trbRegistry) => {
+  const crop = await captureCenteredCrop(detection.lat, detection.lng, { zoom: 19, size: 512 })
+  const verification = await verifyBarnAtCenter(crop.src, apiKey)
+  if (!verification.isBarn) return null
+
+  const items = await analyzeBarnImage(crop.src, apiKey)
+  const box = closestBox(items)
+  if (!box) return null
+
+  const location = gridToLocation(box, crop)
+  if (!isPointInBounds(location.center.lat, location.center.lng, detection.bounds)) return null
+  if (location.area < MIN_BARN_AREA || location.area > MAX_BARN_AREA) return null
+
+  return applyLocation(detection, location, trbRegistry, verification)
+}
+
 const refineDetections = async (detections, apiKey, trbRegistry) => {
-  const targets = detections.slice(0, MAX_REFINEMENTS)
-  for (let index = 0; index < targets.length; index += 3) {
-    await Promise.all(
-      targets.slice(index, index + 3).map(async (detection) => {
+  const refined = []
+  for (let index = 0; index < detections.length; index += 3) {
+    const batch = detections.slice(index, index + 3)
+    const results = await Promise.all(
+      batch.map(async (detection) => {
         try {
-          const grid = await captureCenteredGrid(detection.lat, detection.lng, 19)
-          const items = await analyzeBarnImage(grid.src, apiKey)
-          const box = closestBox(items)
-          if (!box) return
-          const location = gridToLocation(box, grid)
-          if (!isPointInBounds(location.center.lat, location.center.lng, detection.bounds)) return
-          Object.assign(detection, applyLocation(detection, location, trbRegistry))
+          return await verifyCandidate(detection, apiKey, trbRegistry)
         } catch {
-          // Keep the coarse box if a refinement request fails.
+          // A candidate that cannot be re-captured or verified is dropped
+          // instead of being shown as a possible barn.
+          return null
         }
       }),
     )
+    refined.push(...results.filter(Boolean))
   }
-  return detections
+  return refined
 }
 
 export const locateBarnsInBounds = async ({
@@ -131,7 +156,7 @@ export const locateBarnsInBounds = async ({
   const items = await analyzeBarnImage(grid.src, apiKey)
 
   const stamp = Date.now()
-  const detections = items
+  const coarse = items
     .map((item, index) => {
       const box = closestBox([item])
       if (!box) return null
@@ -165,8 +190,9 @@ export const locateBarnsInBounds = async ({
       }
     })
     .filter(Boolean)
+    .slice(0, MAX_REFINEMENTS)
 
-  const refined = await refineDetections(detections, apiKey, trbRegistry)
+  const refined = await refineDetections(coarse, apiKey, trbRegistry)
   return refined.map((detection) => {
     const { bounds: _bounds, ...rest } = detection
     return rest

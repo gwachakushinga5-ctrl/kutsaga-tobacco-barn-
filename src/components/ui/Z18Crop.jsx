@@ -5,8 +5,9 @@ import {
   analyzeBarnImage,
   getGeminiKey,
   saveGeminiKey,
+  verifyBarnAtCenter,
 } from '../../services/gemini'
-import { captureTileGrid } from '../../lib/imagery'
+import { captureCenteredCrop } from '../../lib/imagery'
 
 const confidenceClass = {
   high: 'border-emerald-400 bg-emerald-400/10 text-emerald-300',
@@ -49,6 +50,7 @@ export const Z18Crop = ({ detectionId, lat, lng, color = '#22d3ee' }) => {
   const [foundCount, setFoundCount] = useState(0)
   const [analysis, setAnalysis] = useState('idle')
   const [analysisError, setAnalysisError] = useState('')
+  const [verificationNote, setVerificationNote] = useState('')
   const [apiKey, setApiKey] = useState(getGeminiKey)
   const [keyDraft, setKeyDraft] = useState(getGeminiKey)
   const [showKeyInput, setShowKeyInput] = useState(false)
@@ -64,6 +66,7 @@ export const Z18Crop = ({ detectionId, lat, lng, color = '#22d3ee' }) => {
       setFoundCount(0)
       setAnalysis('idle')
       setAnalysisError('')
+      setVerificationNote('')
       setImageRect(null)
       return undefined
     }
@@ -77,15 +80,16 @@ export const Z18Crop = ({ detectionId, lat, lng, color = '#22d3ee' }) => {
     setFoundCount(0)
     setAnalysis('idle')
     setAnalysisError('')
+    setVerificationNote('')
     setImageRect(null)
 
     const loadCrop = async () => {
       try {
-        // A tight, tile-based crop centered on the candidate gives Gemini an
-        // exact reference frame for the barn we are reviewing.
-        const src = await captureTileGrid(lat, lng, 19)
+        // Pixel-centred crop: the candidate coordinate is exactly at (500,500)
+        // in the image, so the centre check refers to this candidate only.
+        const captured = await captureCenteredCrop(lat, lng, { zoom: 19, size: 512 })
         if (!active) return
-        setCrop({ src, local: true })
+        setCrop({ src: captured.src, local: true })
         setStatus('ready')
       } catch {
         try {
@@ -146,18 +150,31 @@ export const Z18Crop = ({ detectionId, lat, lng, color = '#22d3ee' }) => {
     if (!source || !key) return
     setAnalysis('loading')
     setAnalysisError('')
+    setVerificationNote('')
     setBoxes([])
     setFoundCount(0)
     try {
+      // Confirm first: if the centre is not a barn, do not draw any box.
+      const verification = await verifyBarnAtCenter(source, key)
+      if (!verification.isBarn) {
+        setVerificationNote(
+          verification.reason
+            ? `Gemini: not a barn — ${verification.reason}`
+            : 'Gemini: no barn at the candidate point',
+        )
+        setAnalysis('done')
+        return
+      }
+
       const detected = await analyzeBarnImage(source, key)
       const prepared = detected
         .map(prepareBox)
         .filter(Boolean)
         .sort((a, b) => a.distance - b.distance)
       setFoundCount(prepared.length)
-      // The candidate sits at the centre of this crop, so its barn is the box
-      // closest to the centre. Draw that one only.
+      // The candidate sits at the centre, so its barn is the closest box.
       setBoxes(prepared.slice(0, 1))
+      if (!prepared.length) setVerificationNote('Gemini confirmed a barn but returned no box')
       setAnalysis('done')
     } catch (error) {
       setAnalysisError(error.message || 'Gemini analysis failed')
@@ -195,12 +212,31 @@ export const Z18Crop = ({ detectionId, lat, lng, color = '#22d3ee' }) => {
       : analysis === 'done'
         ? boxes.length
           ? `${foundCount} barn${foundCount === 1 ? '' : 's'} found · candidate barn boxed`
-          : 'No barn found at the candidate point'
+          : verificationNote || 'No barn confirmed at the candidate point'
         : analysis === 'error'
           ? analysisError
           : apiKey
             ? 'Gemini barn detection ready'
             : 'Save a Gemini key to mark the barn'
+
+  const geminiBadge =
+    analysis === 'loading'
+      ? { label: 'GEMINI CHECKING', className: 'border-cyan-500/40 bg-cyan-500/10 text-cyan-300' }
+      : analysis === 'error'
+        ? { label: 'GEMINI ERROR', className: 'border-red-500/40 bg-red-500/10 text-red-300' }
+        : analysis === 'done'
+          ? boxes.length
+            ? {
+                label: 'GEMINI: BARN ✓',
+                className: 'border-emerald-500/45 bg-emerald-500/10 text-emerald-300',
+              }
+            : {
+                label: 'GEMINI: NOT A BARN',
+                className: 'border-amber-500/45 bg-amber-500/10 text-amber-300',
+              }
+          : apiKey
+            ? { label: 'GEMINI READY', className: 'border-slate-600/70 bg-slate-900/80 text-slate-400' }
+            : { label: 'NO GEMINI KEY', className: 'border-slate-600/70 bg-slate-900/80 text-slate-500' }
 
   return (
     <div>
@@ -250,6 +286,11 @@ export const Z18Crop = ({ detectionId, lat, lng, color = '#22d3ee' }) => {
             {crop?.local ? 'Z19 candidate crop' : 'Candidate crop'}
           </div>
         ) : null}
+        <div
+          className={`pointer-events-none absolute right-2 top-2 rounded border px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-[0.12em] ${geminiBadge.className}`}
+        >
+          {geminiBadge.label}
+        </div>
         <div
           className="pointer-events-none absolute h-px w-7 -translate-x-1/2 -translate-y-1/2"
           style={{ left: '50%', top: '50%', backgroundColor: color }}

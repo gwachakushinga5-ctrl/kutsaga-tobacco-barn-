@@ -28,11 +28,18 @@ export const ScanSectorCard = ({
   aoi,
   geminiLocate,
   onGeminiLocateChange,
+  geminiStatus,
 }) => {
   const selectedZone = ZONES.find((zone) => zone.id === zoneId)
   const hasSelection = Boolean(selectedZone || aoi)
   const selectionLabel = aoi?.label ?? selectedZone?.name
   const selectionMeta = aoi?.area ? `${formatArea(aoi.area)} AOI` : 'Zone bounds'
+  const statusTone =
+    geminiStatus?.includes('error') || geminiStatus?.includes('skipped')
+      ? 'text-amber-300'
+      : geminiStatus?.includes('confirmed') || geminiStatus?.includes('ready')
+        ? 'text-emerald-300'
+        : 'text-slate-500'
 
   return (
     <GlassCard className="shrink-0 p-4">
@@ -138,8 +145,11 @@ export const ScanSectorCard = ({
           dotClass="bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.8)]"
         />
       </div>
-      <p className="mt-1.5 text-[8.5px] leading-relaxed text-slate-600">
-        Also scans the sector imagery with Gemini and boxes each barn it finds.
+      <p className={`mt-1.5 font-mono text-[8.5px] leading-relaxed ${statusTone}`}>
+        {geminiStatus || 'Gemini: not checked yet'}
+      </p>
+      <p className="mt-0.5 text-[8px] leading-relaxed text-slate-600">
+        Every Gemini hit is re-checked on a centred Z19 crop before it enters the queue.
       </p>
 
       <div className="mt-4 flex gap-2">

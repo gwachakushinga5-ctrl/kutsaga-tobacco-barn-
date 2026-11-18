@@ -1,13 +1,32 @@
 import { useEffect, useState } from 'react'
 import { Eye, Info, MapPin, Sparkles, X } from 'lucide-react'
-import { captureTileGrid } from '../lib/imagery'
-import { analyzeBarnImage, getGeminiKey, saveGeminiKey } from '../services/gemini'
+import { captureCenteredCrop } from '../lib/imagery'
+import {
+  analyzeBarnImage,
+  getGeminiKey,
+  saveGeminiKey,
+  verifyBarnAtCenter,
+} from '../services/gemini'
 import { GlassCard } from './ui/GlassCard'
 
 const confidenceClass = {
   high: 'border-emerald-400/70 text-emerald-300',
   medium: 'border-amber-400/70 text-amber-300',
   low: 'border-slate-500/70 text-slate-400',
+}
+
+const prepareBox = (item) => {
+  const values = (item?.box_2d ?? []).map((value) => {
+    const number = Number(value)
+    if (!Number.isFinite(number)) return 0
+    const scaled = number >= 0 && number <= 1 ? number * 1000 : number
+    return Math.min(1000, Math.max(0, scaled))
+  })
+  if (values.length !== 4) return null
+  let [yMin, xMin, yMax, xMax] = values
+  if (xMax <= xMin || yMax <= yMin) [xMin, yMin, xMax, yMax] = values
+  if (xMax <= xMin || yMax <= yMin) return null
+  return { ...item, box_2d: [yMin, xMin, yMax, xMax] }
 }
 
 export const ManualInspectionDialog = ({ point, onClose, onCaptureMapArea }) => {
@@ -18,6 +37,7 @@ export const ManualInspectionDialog = ({ point, onClose, onCaptureMapArea }) => 
   const [analyzing, setAnalyzing] = useState('')
   const [boxes, setBoxes] = useState([])
   const [analysisError, setAnalysisError] = useState('')
+  const [verificationNote, setVerificationNote] = useState('')
 
   useEffect(() => {
     if (!point) return undefined
@@ -26,10 +46,11 @@ export const ManualInspectionDialog = ({ point, onClose, onCaptureMapArea }) => 
     setImageError('')
     setBoxes([])
     setAnalysisError('')
+    setVerificationNote('')
 
-    captureTileGrid(point.lat, point.lng, 18)
-      .then((url) => {
-        if (active) setImageUrl(url)
+    captureCenteredCrop(point.lat, point.lng, { zoom: 19, size: 512 })
+      .then((captured) => {
+        if (active) setImageUrl(captured.src)
       })
       .catch((error) => {
         if (active) setImageError(error.message)
@@ -64,11 +85,33 @@ export const ManualInspectionDialog = ({ point, onClose, onCaptureMapArea }) => 
     }
     setAnalyzing(mode)
     setAnalysisError('')
+    setVerificationNote('')
     setBoxes([])
     try {
       const source = mode === 'map' ? await onCaptureMapArea?.() : imageUrl
       if (!source) throw new Error('No image available to analyze')
-      setBoxes(await analyzeBarnImage(source, apiKey))
+
+      if (mode === 'crop') {
+        // The crop is centred on the inspection point, so confirm that point
+        // first. No confirmation means no boxes.
+        const verification = await verifyBarnAtCenter(source, apiKey)
+        if (!verification.isBarn) {
+          setVerificationNote(
+            verification.reason
+              ? `Not a barn — ${verification.reason}`
+              : 'No barn at the inspection point',
+          )
+          return
+        }
+      }
+
+      const detected = await analyzeBarnImage(source, apiKey)
+      const prepared = detected.map(prepareBox).filter(Boolean)
+      setBoxes(prepared)
+      if (mode === 'map') setVerificationNote('Map area search — centre check not applicable')
+      if (!prepared.length) {
+        setVerificationNote('Gemini found no tight barn box in this image')
+      }
     } catch (error) {
       setAnalysisError(error.message)
     } finally {
@@ -144,8 +187,15 @@ export const ManualInspectionDialog = ({ point, onClose, onCaptureMapArea }) => 
                 })}
               </div>
               <p className="mt-1 font-mono text-[8px] uppercase tracking-[0.12em] text-slate-500">
-                {boxes.length ? `${boxes.length} Gemini detection${boxes.length === 1 ? '' : 's'}` : 'Satellite crop · Z18'}
+                {boxes.length
+                  ? `${boxes.length} Gemini detection${boxes.length === 1 ? '' : 's'}`
+                  : 'Satellite crop · Z19'}
               </p>
+              {verificationNote ? (
+                <p className="mt-1 rounded border border-amber-500/25 bg-amber-500/10 px-2 py-1 font-mono text-[8.5px] leading-relaxed text-amber-200">
+                  {verificationNote}
+                </p>
+              ) : null}
             </div>
 
             <div className="flex flex-col gap-2">
