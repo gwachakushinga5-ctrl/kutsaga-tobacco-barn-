@@ -5,7 +5,7 @@ const TILE_SIZE = 256
 
 export const IMAGERY_TILE_SIZE = TILE_SIZE
 
-export const captureTileGrid = async (lat, lng, zoom = 18, grid = 3) => {
+export const captureCenteredGrid = async (lat, lng, zoom = 18, grid = 3) => {
   const z = Math.max(0, Math.min(19, Math.floor(zoom)))
   const fraction = latLngToTileFraction(lat, lng, z)
   const baseX = Math.floor(fraction.x)
@@ -46,8 +46,19 @@ export const captureTileGrid = async (lat, lng, zoom = 18, grid = 3) => {
     ),
   )
 
-  return canvas.toDataURL('image/jpeg', 0.9)
+  return {
+    src: canvas.toDataURL('image/jpeg', 0.9),
+    width: canvas.width,
+    height: canvas.height,
+    zoom: z,
+    originX: baseX - half,
+    originY: baseY - half,
+    tileCount: tiles.length,
+  }
 }
+
+export const captureTileGrid = async (lat, lng, zoom = 18, grid = 3) =>
+  (await captureCenteredGrid(lat, lng, zoom, grid)).src
 
 const tileRangeForBounds = (bounds, zoom) => {
   const northWest = latLngToTileFraction(bounds.north, bounds.west, zoom)

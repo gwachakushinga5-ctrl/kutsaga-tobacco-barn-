@@ -1,5 +1,9 @@
 import { analyzeBarnImage } from '../services/gemini'
-import { captureBoundsGrid, IMAGERY_TILE_SIZE } from './imagery'
+import {
+  captureBoundsGrid,
+  captureCenteredGrid,
+  IMAGERY_TILE_SIZE,
+} from './imagery'
 import {
   geodesicArea,
   haversineMeters,
@@ -8,12 +12,57 @@ import {
 } from './geo'
 
 const CONFIDENCE_SCORE = { high: 0.92, medium: 0.72, low: 0.52 }
+const MAX_REFINEMENTS = 12
 
 const normalizeBoxValue = (value) => {
   const number = Number(value)
   if (!Number.isFinite(number)) return 0
   const scaled = number >= 0 && number <= 1 ? number * 1000 : number
   return Math.min(1000, Math.max(0, scaled))
+}
+
+const closestBox = (items, targetX = 500, targetY = 500) =>
+  items
+    .map((item) => {
+      const values = (item?.box_2d ?? []).map(normalizeBoxValue)
+      if (values.length !== 4) return null
+      let [yMin, xMin, yMax, xMax] = values
+      if (xMax <= xMin || yMax <= yMin) [xMin, yMin, xMax, yMax] = values
+      if (xMax <= xMin || yMax <= yMin) return null
+      return {
+        xMin,
+        yMin,
+        xMax,
+        yMax,
+        confidence: item.confidence ?? 'low',
+        distance: Math.hypot((xMin + xMax) / 2 - targetX, (yMin + yMax) / 2 - targetY),
+      }
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.distance - b.distance)[0] ?? null
+
+const gridToLocation = (box, grid) => {
+  const toLatLng = (x, y) => {
+    const fractionX = grid.originX + (x / 1000) * (grid.width / IMAGERY_TILE_SIZE)
+    const fractionY = grid.originY + (y / 1000) * (grid.height / IMAGERY_TILE_SIZE)
+    return tileFractionToLatLng(fractionX, fractionY, grid.zoom)
+  }
+  const center = toLatLng((box.xMin + box.xMax) / 2, (box.yMin + box.yMax) / 2)
+  const southWest = toLatLng(box.xMin, box.yMax)
+  const northEast = toLatLng(box.xMax, box.yMin)
+  const bbox = {
+    south: southWest.lat,
+    north: northEast.lat,
+    west: southWest.lng,
+    east: northEast.lng,
+  }
+  const area = geodesicArea([
+    { lat: bbox.south, lng: bbox.west },
+    { lat: bbox.south, lng: bbox.east },
+    { lat: bbox.north, lng: bbox.east },
+    { lat: bbox.north, lng: bbox.west },
+  ])
+  return { center, bbox, area, confidence: CONFIDENCE_SCORE[box.confidence] ?? CONFIDENCE_SCORE.low }
 }
 
 const nearestTrb = (lat, lng, registry) =>
@@ -24,6 +73,48 @@ const nearestTrb = (lat, lng, registry) =>
     },
     { item: null, distance: Infinity },
   )
+
+const applyLocation = (detection, location, trbRegistry) => {
+  const match = nearestTrb(location.center.lat, location.center.lng, trbRegistry)
+  const trbMatch = match.distance <= 55
+  return {
+    ...detection,
+    lat: location.center.lat,
+    lng: location.center.lng,
+    bbox: location.bbox,
+    area: location.area,
+    confidence: location.confidence,
+    priority: location.confidence,
+    trbState: trbMatch ? 'POSSIBLE_EXISTING_MATCH' : 'NO_MATCH',
+    trbId: trbMatch ? match.item.id : null,
+    trbName: trbMatch ? match.item.name : null,
+    trbDistance: Number.isFinite(match.distance) ? match.distance : null,
+    reviewBand: location.area < 35 ? 'SMALL_STRUCTURE_SCRUTINY' : 'STANDARD',
+    small: location.area < 35,
+  }
+}
+
+const refineDetections = async (detections, apiKey, trbRegistry) => {
+  const targets = detections.slice(0, MAX_REFINEMENTS)
+  for (let index = 0; index < targets.length; index += 3) {
+    await Promise.all(
+      targets.slice(index, index + 3).map(async (detection) => {
+        try {
+          const grid = await captureCenteredGrid(detection.lat, detection.lng, 19)
+          const items = await analyzeBarnImage(grid.src, apiKey)
+          const box = closestBox(items)
+          if (!box) return
+          const location = gridToLocation(box, grid)
+          if (!isPointInBounds(location.center.lat, location.center.lng, detection.bounds)) return
+          Object.assign(detection, applyLocation(detection, location, trbRegistry))
+        } catch {
+          // Keep the coarse box if a refinement request fails.
+        }
+      }),
+    )
+  }
+  return detections
+}
 
 export const locateBarnsInBounds = async ({
   bounds,
@@ -37,66 +128,47 @@ export const locateBarnsInBounds = async ({
   if (!bounds) throw new Error('No scan bounds available')
 
   const grid = await captureBoundsGrid(bounds, { zoom, maxTiles })
-  const boxes = await analyzeBarnImage(grid.src, apiKey)
-
-  const toLatLng = (x, y) => {
-    const fractionX = grid.originX + (x / 1000) * (grid.width / IMAGERY_TILE_SIZE)
-    const fractionY = grid.originY + (y / 1000) * (grid.height / IMAGERY_TILE_SIZE)
-    return tileFractionToLatLng(fractionX, fractionY, grid.zoom)
-  }
+  const items = await analyzeBarnImage(grid.src, apiKey)
 
   const stamp = Date.now()
-  return boxes
+  const detections = items
     .map((item, index) => {
-      const [yMin, xMin, yMax, xMax] = (item.box_2d ?? []).map(normalizeBoxValue)
-      if (xMax <= xMin || yMax <= yMin) return null
-
-      const center = toLatLng((xMin + xMax) / 2, (yMin + yMax) / 2)
-      if (!isPointInBounds(center.lat, center.lng, bounds)) return null
-
-      const southWest = toLatLng(xMin, yMax)
-      const northEast = toLatLng(xMax, yMin)
-      const bbox = {
-        south: southWest.lat,
-        north: northEast.lat,
-        west: southWest.lng,
-        east: northEast.lng,
-      }
-      const area = geodesicArea([
-        { lat: bbox.south, lng: bbox.west },
-        { lat: bbox.south, lng: bbox.east },
-        { lat: bbox.north, lng: bbox.east },
-        { lat: bbox.north, lng: bbox.west },
-      ])
-      const confidence = CONFIDENCE_SCORE[item.confidence] ?? CONFIDENCE_SCORE.low
-      const match = nearestTrb(center.lat, center.lng, trbRegistry)
-      const trbMatch = match.distance <= 55
-
+      const box = closestBox([item])
+      if (!box) return null
+      const location = gridToLocation(box, grid)
+      if (!isPointInBounds(location.center.lat, location.center.lng, bounds)) return null
       return {
         id: `GEMINI-${stamp}-${index}`,
         complexId: `GEMINI-${stamp}-${index}`,
         name: 'Gemini barn',
-        lat: center.lat,
-        lng: center.lng,
-        confidence,
-        area,
-        priority: confidence,
+        lat: location.center.lat,
+        lng: location.center.lng,
+        confidence: location.confidence,
+        area: location.area,
+        priority: location.confidence,
         status: 'waiting',
         reviewStatus: null,
-        trbState: trbMatch ? 'POSSIBLE_EXISTING_MATCH' : 'NO_MATCH',
-        reviewBand: area < 35 ? 'SMALL_STRUCTURE_SCRUTINY' : 'STANDARD',
+        trbState: 'NO_MATCH',
+        reviewBand: location.area < 35 ? 'SMALL_STRUCTURE_SCRUTINY' : 'STANDARD',
         sector: label,
         detectedAt: new Date(stamp).toISOString(),
-        bbox,
-        trbId: trbMatch ? match.item.id : null,
-        trbName: trbMatch ? match.item.name : null,
-        trbDistance: Number.isFinite(match.distance) ? match.distance : null,
-        small: area < 35,
+        bbox: location.bbox,
+        trbId: null,
+        trbName: null,
+        trbDistance: null,
+        small: location.area < 35,
         rejectionReason: null,
         barnCount: 1,
         detections: [],
         source: 'gemini',
+        bounds,
       }
     })
     .filter(Boolean)
+
+  const refined = await refineDetections(detections, apiKey, trbRegistry)
+  return refined.map((detection) => {
+    const { bounds: _bounds, ...rest } = detection
+    return rest
+  })
 }

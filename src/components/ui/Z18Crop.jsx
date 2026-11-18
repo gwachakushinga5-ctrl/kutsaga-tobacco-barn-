@@ -6,6 +6,7 @@ import {
   getGeminiKey,
   saveGeminiKey,
 } from '../../services/gemini'
+import { captureTileGrid } from '../../lib/imagery'
 
 const confidenceClass = {
   high: 'border-emerald-400 bg-emerald-400/10 text-emerald-300',
@@ -13,17 +14,39 @@ const confidenceClass = {
   low: 'border-slate-400/70 bg-slate-400/10 text-slate-300',
 }
 
-const normalizeBox = (value) => {
+const normalizeBoxValue = (value) => {
   const number = Number(value)
   if (!Number.isFinite(number)) return 0
   const scaled = number >= 0 && number <= 1 ? number * 1000 : number
   return Math.min(1000, Math.max(0, scaled))
 }
 
+const prepareBox = (item) => {
+  const values = (item?.box_2d ?? []).map(normalizeBoxValue)
+  if (values.length !== 4) return null
+
+  let [yMin, xMin, yMax, xMax] = values
+  // Some responses use [x_min, y_min, x_max, y_max] instead.
+  if (xMax <= xMin || yMax <= yMin) {
+    ;[xMin, yMin, xMax, yMax] = values
+  }
+  if (xMax <= xMin || yMax <= yMin) return null
+
+  return {
+    xMin,
+    yMin,
+    xMax,
+    yMax,
+    confidence: item.confidence ?? 'low',
+    distance: Math.hypot((xMin + xMax) / 2 - 500, (yMin + yMax) / 2 - 500),
+  }
+}
+
 export const Z18Crop = ({ detectionId, lat, lng, color = '#22d3ee' }) => {
   const [crop, setCrop] = useState(null)
   const [status, setStatus] = useState(detectionId ? 'loading' : 'empty')
   const [boxes, setBoxes] = useState([])
+  const [foundCount, setFoundCount] = useState(0)
   const [analysis, setAnalysis] = useState('idle')
   const [analysisError, setAnalysisError] = useState('')
   const [apiKey, setApiKey] = useState(getGeminiKey)
@@ -38,6 +61,7 @@ export const Z18Crop = ({ detectionId, lat, lng, color = '#22d3ee' }) => {
       setCrop(null)
       setStatus('empty')
       setBoxes([])
+      setFoundCount(0)
       setAnalysis('idle')
       setAnalysisError('')
       setImageRect(null)
@@ -45,39 +69,52 @@ export const Z18Crop = ({ detectionId, lat, lng, color = '#22d3ee' }) => {
     }
 
     let active = true
-    let loaded = null
+    let apiCrop = null
     const controller = new AbortController()
     setCrop(null)
     setStatus('loading')
     setBoxes([])
+    setFoundCount(0)
     setAnalysis('idle')
     setAnalysisError('')
     setImageRect(null)
 
-    getCandidateCrop(detectionId, controller.signal)
-      .then((result) => {
-        if (!active) {
-          if (result?.objectUrl) URL.revokeObjectURL(result.src)
-          return
+    const loadCrop = async () => {
+      try {
+        // A tight, tile-based crop centered on the candidate gives Gemini an
+        // exact reference frame for the barn we are reviewing.
+        const src = await captureTileGrid(lat, lng, 19)
+        if (!active) return
+        setCrop({ src, local: true })
+        setStatus('ready')
+      } catch {
+        try {
+          const result = await getCandidateCrop(detectionId, controller.signal)
+          if (!active) {
+            if (result?.objectUrl) URL.revokeObjectURL(result.src)
+            return
+          }
+          apiCrop = result
+          if (result) {
+            setCrop(result)
+            setStatus('ready')
+          } else {
+            setStatus('empty')
+          }
+        } catch {
+          if (active) setStatus('empty')
         }
-        loaded = result
-        if (result) {
-          setCrop(result)
-          setStatus('ready')
-        } else {
-          setStatus('empty')
-        }
-      })
-      .catch(() => {
-        if (active) setStatus('empty')
-      })
+      }
+    }
+
+    loadCrop()
 
     return () => {
       active = false
       controller.abort()
-      if (loaded?.objectUrl) URL.revokeObjectURL(loaded.src)
+      if (apiCrop?.objectUrl) URL.revokeObjectURL(apiCrop.src)
     }
-  }, [detectionId])
+  }, [detectionId, lat, lng])
 
   const measureImage = useCallback(() => {
     const container = containerRef.current
@@ -105,23 +142,28 @@ export const Z18Crop = ({ detectionId, lat, lng, color = '#22d3ee' }) => {
     return () => observer.disconnect()
   }, [crop?.src, measureImage])
 
-  const runAnalysis = useCallback(
-    async (source, key) => {
-      if (!source || !key) return
-      setAnalysis('loading')
-      setAnalysisError('')
-      setBoxes([])
-      try {
-        const detected = await analyzeBarnImage(source, key)
-        setBoxes(detected)
-        setAnalysis('done')
-      } catch (error) {
-        setAnalysisError(error.message || 'Gemini analysis failed')
-        setAnalysis('error')
-      }
-    },
-    [],
-  )
+  const runAnalysis = useCallback(async (source, key) => {
+    if (!source || !key) return
+    setAnalysis('loading')
+    setAnalysisError('')
+    setBoxes([])
+    setFoundCount(0)
+    try {
+      const detected = await analyzeBarnImage(source, key)
+      const prepared = detected
+        .map(prepareBox)
+        .filter(Boolean)
+        .sort((a, b) => a.distance - b.distance)
+      setFoundCount(prepared.length)
+      // The candidate sits at the centre of this crop, so its barn is the box
+      // closest to the centre. Draw that one only.
+      setBoxes(prepared.slice(0, 1))
+      setAnalysis('done')
+    } catch (error) {
+      setAnalysisError(error.message || 'Gemini analysis failed')
+      setAnalysis('error')
+    }
+  }, [])
 
   useEffect(() => {
     const key = getGeminiKey()
@@ -149,14 +191,16 @@ export const Z18Crop = ({ detectionId, lat, lng, color = '#22d3ee' }) => {
 
   const analysisLabel =
     analysis === 'loading'
-      ? 'Gemini is checking for barns…'
+      ? 'Gemini is locating the candidate barn…'
       : analysis === 'done'
-        ? `${boxes.length} barn${boxes.length === 1 ? '' : 's'} boxed by Gemini`
+        ? boxes.length
+          ? `${foundCount} barn${foundCount === 1 ? '' : 's'} found · candidate barn boxed`
+          : 'No barn found at the candidate point'
         : analysis === 'error'
           ? analysisError
           : apiKey
             ? 'Gemini barn detection ready'
-            : 'Save a Gemini key to mark barns'
+            : 'Save a Gemini key to mark the barn'
 
   return (
     <div>
@@ -182,32 +226,28 @@ export const Z18Crop = ({ detectionId, lat, lng, color = '#22d3ee' }) => {
         )}
 
         {imageRect
-          ? boxes.map((item, index) => {
-              const [yMin, xMin, yMax, xMax] = (item.box_2d ?? []).map(normalizeBox)
-              if (xMax <= xMin || yMax <= yMin) return null
-              return (
-                <div
-                  key={`barn-${index}`}
-                  className={`pointer-events-none absolute border-2 ${confidenceClass[item.confidence] ?? confidenceClass.low}`}
-                  style={{
-                    left: imageRect.left + (xMin / 1000) * imageRect.width,
-                    top: imageRect.top + (yMin / 1000) * imageRect.height,
-                    width: ((xMax - xMin) / 1000) * imageRect.width,
-                    height: ((yMax - yMin) / 1000) * imageRect.height,
-                  }}
-                >
-                  <span className="absolute -top-4 left-0 whitespace-nowrap rounded border border-current bg-slate-950/85 px-1 font-mono text-[7.5px]">
-                    #{index + 1} · {item.confidence ?? 'low'}
-                  </span>
-                </div>
-              )
-            })
+          ? boxes.map((box, index) => (
+              <div
+                key={`barn-${index}`}
+                className={`pointer-events-none absolute border-2 ${confidenceClass[box.confidence] ?? confidenceClass.low}`}
+                style={{
+                  left: imageRect.left + (box.xMin / 1000) * imageRect.width,
+                  top: imageRect.top + (box.yMin / 1000) * imageRect.height,
+                  width: ((box.xMax - box.xMin) / 1000) * imageRect.width,
+                  height: ((box.yMax - box.yMin) / 1000) * imageRect.height,
+                }}
+              >
+                <span className="absolute -top-4 left-0 whitespace-nowrap rounded border border-current bg-slate-950/85 px-1 font-mono text-[7.5px]">
+                  #{index + 1} · {box.confidence} · candidate
+                </span>
+              </div>
+            ))
           : null}
 
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/45 via-transparent to-slate-950/10" />
         {status === 'ready' ? (
           <div className="pointer-events-none absolute left-2 top-2 rounded border border-cyan-500/40 bg-slate-950/80 px-1.5 py-0.5 font-mono text-[8.5px] uppercase tracking-[0.14em] text-cyan-300">
-            Candidate crop
+            {crop?.local ? 'Z19 candidate crop' : 'Candidate crop'}
           </div>
         ) : null}
         <div
@@ -231,7 +271,7 @@ export const Z18Crop = ({ detectionId, lat, lng, color = '#22d3ee' }) => {
           {lat.toFixed(5)}, {lng.toFixed(5)}
         </div>
         <div className="pointer-events-none absolute bottom-2 right-2 rounded border border-slate-700/70 bg-slate-950/80 px-1.5 py-0.5 font-mono text-[8.5px] text-slate-500">
-          {crop ? 'API crop' : 'No imagery'}
+          {crop ? 'Satellite crop' : 'No imagery'}
         </div>
       </div>
 
@@ -248,7 +288,7 @@ export const Z18Crop = ({ detectionId, lat, lng, color = '#22d3ee' }) => {
           className="flex shrink-0 items-center gap-1 rounded border border-emerald-500/35 bg-emerald-500/10 px-2 py-1 text-[8px] font-semibold uppercase tracking-[0.1em] text-emerald-300 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Sparkles size={9} />
-          {analysis === 'loading' ? 'Checking…' : 'Mark barns'}
+          {analysis === 'loading' ? 'Locating…' : 'Mark barn'}
         </button>
       </div>
 
