@@ -10,21 +10,8 @@ export const SidebarHeader = ({ user, onSignOut }) => {
     <GlassCard className="shrink-0 overflow-hidden">
       <div className="p-4">
         <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <Logo />
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h1 className="text-[17px] font-bold tracking-[0.24em] text-white">
-                  KUTSAGA
-                </h1>
-                <span className="rounded border border-emerald-400/25 bg-emerald-400/10 px-1.5 py-0.5 font-mono text-[7.5px] font-semibold tracking-[0.14em] text-emerald-300">
-                  HITL
-                </span>
-              </div>
-              <p className="mt-1 text-[10px] leading-snug text-slate-300">
-                Tobacco Barn Remote Sensing &amp; Exploration
-              </p>
-            </div>
+          <div className="flex min-w-0 items-center">
+            <Logo className="w-44" />
           </div>
           <div className="flex shrink-0 flex-col items-end gap-1.5">
             <span className="rounded-full border border-slate-700/80 bg-slate-800/60 px-1.5 py-0.5 font-mono text-[7.5px] font-semibold tracking-[0.16em] text-slate-400">

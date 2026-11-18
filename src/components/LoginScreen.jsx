@@ -16,14 +16,8 @@ export const LoginScreen = ({ onSubmit, pending, error }) => {
   return (
     <div className="app-shell-min flex w-full items-center justify-center bg-[#020617] p-4 text-slate-100">
       <div className="glass-card w-full max-w-sm p-6">
-        <div className="flex items-center gap-3">
-          <Logo />
-          <div>
-            <h1 className="text-[16px] font-bold tracking-[0.24em] text-white">KUTSAGA</h1>
-            <p className="mt-0.5 text-[9.5px] text-slate-400">
-              Tobacco Barn Discovery · Human-in-the-loop review
-            </p>
-          </div>
+        <div className="flex justify-center">
+          <Logo className="w-52" />
         </div>
 
         <form className="mt-5 space-y-3" onSubmit={handleSubmit}>
