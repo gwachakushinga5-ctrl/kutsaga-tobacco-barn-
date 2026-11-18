@@ -98,3 +98,15 @@ export const latLngToTileFraction = (lat, lng, zoom) => ({
   x: lngToTileFraction(lng, zoom),
   y: latToTileFraction(lat, zoom),
 })
+
+export const tileFractionToLng = (x, zoom) => (x / 2 ** zoom) * 360 - 180
+
+export const tileFractionToLat = (y, zoom) => {
+  const n = Math.PI - (2 * Math.PI * y) / 2 ** zoom
+  return (180 / Math.PI) * Math.atan(Math.sinh(n))
+}
+
+export const tileFractionToLatLng = (x, y, zoom) => ({
+  lat: tileFractionToLat(y, zoom),
+  lng: tileFractionToLng(x, zoom),
+})

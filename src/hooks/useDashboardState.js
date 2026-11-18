@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { INITIAL_COUNTS, INITIAL_SECTORS, INITIAL_TELEMETRY } from '../data/initialState'
 import { STATUS_META } from '../lib/constants'
 import { filterDetections, pageCountFor, paginate } from '../lib/filters'
+import { locateBarnsInBounds } from '../lib/geminiLocate'
+import { getGeminiKey } from '../services/gemini'
 import {
   aoiPolygonFromBounds,
   aoiPolygonFromPoints,
@@ -111,6 +113,7 @@ export const useDashboardState = () => {
   const [loading, setLoading] = useState(true)
   const [toasts, setToasts] = useState([])
   const [taxonomyOpen, setTaxonomyOpen] = useState(false)
+  const [geminiLocate, setGeminiLocate] = useState(() => Boolean(getGeminiKey()))
   const [exporting, setExporting] = useState(false)
   const [reviewing, setReviewing] = useState(false)
   const toastTimers = useRef(new Map())
@@ -336,15 +339,49 @@ export const useDashboardState = () => {
         }))
 
         await refresh(submission.job_id)
+
+        let geminiCount = 0
+        if (geminiLocate) {
+          const apiKey = getGeminiKey()
+          if (!apiKey) {
+            addToast('Gemini locate is on but no API key is saved', 'info')
+          } else {
+            try {
+              const located = await locateBarnsInBounds({
+                bounds,
+                label,
+                apiKey,
+                trbRegistry,
+              })
+              geminiCount = located.length
+              if (located.length) {
+                setScanDetections((current) => [...located, ...current])
+                setCountsByScope((current) => ({
+                  ...current,
+                  current: {
+                    ...current.current,
+                    waiting: (current.current.waiting ?? 0) + located.length,
+                    total: (current.current.total ?? 0) + located.length,
+                  },
+                }))
+              }
+            } catch (error) {
+              addToast(`Gemini locate skipped: ${error.message}`, 'info')
+            }
+          }
+        }
+
         setActiveTab('current')
         setStatusFilter('all')
         setScanStatus('IDLE')
 
-        const found = job?.detected_complexes ?? 0
+        const found = (job?.detected_complexes ?? 0) + geminiCount
         addToast(
           found
-            ? `${found} candidate structure${found === 1 ? '' : 's'} flagged for review`
-            : 'Scan complete — no model detections returned. Inspect the imagery manually.',
+            ? `${found} candidate structure${found === 1 ? '' : 's'} flagged for review${
+                geminiCount ? ` (${geminiCount} by Gemini)` : ''
+              }`
+            : 'Scan complete — no detections returned. Inspect the imagery manually.',
           found ? 'success' : 'info',
         )
         return true
@@ -354,7 +391,7 @@ export const useDashboardState = () => {
         return false
       }
     },
-    [addToast, refresh, scanStatus],
+    [addToast, geminiLocate, refresh, scanStatus, trbRegistry],
   )
 
   const clearScan = useCallback(() => {
@@ -432,14 +469,17 @@ export const useDashboardState = () => {
         return false
       }
 
+      const isGeminiLocal = detection.source === 'gemini'
       setReviewing(true)
       try {
-        await verifyCandidate(detectionId, {
-          verdict: verdictFor(status, detection.trbState),
-          rejection_reason: status === 'rejected' ? reason : null,
-          detection_id: null,
-          notes: null,
-        })
+        if (!isGeminiLocal) {
+          await verifyCandidate(detectionId, {
+            verdict: verdictFor(status, detection.trbState),
+            rejection_reason: status === 'rejected' ? reason : null,
+            detection_id: null,
+            notes: null,
+          })
+        }
 
         const patch = (item) =>
           item.id === detectionId
@@ -453,16 +493,18 @@ export const useDashboardState = () => {
         setDetections((current) => current.map(patch))
         setScanDetections((current) => current.map(patch))
 
-        Promise.allSettled([
-          loadCounts({ scope: 'all' }).then((value) =>
-            setCountsByScope((current) => ({ ...current, global: value })),
-          ),
-          scanJobId
-            ? loadCounts({ scan_job_id: scanJobId }).then((value) =>
-                setCountsByScope((current) => ({ ...current, current: value })),
-              )
-            : Promise.resolve(),
-        ])
+        if (!isGeminiLocal) {
+          Promise.allSettled([
+            loadCounts({ scope: 'all' }).then((value) =>
+              setCountsByScope((current) => ({ ...current, global: value })),
+            ),
+            scanJobId
+              ? loadCounts({ scan_job_id: scanJobId }).then((value) =>
+                  setCountsByScope((current) => ({ ...current, current: value })),
+                )
+              : Promise.resolve(),
+          ])
+        }
 
         addToast(
           `${detectionId.slice(0, 8)} marked ${STATUS_META[status]?.shortLabel ?? status}`,
@@ -561,6 +603,8 @@ export const useDashboardState = () => {
     dismissToast,
     taxonomyOpen,
     setTaxonomyOpen,
+    geminiLocate,
+    setGeminiLocate,
     exporting,
     exportRejectedToLearning,
     reviewing,

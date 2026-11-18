@@ -12,6 +12,7 @@ import { formatArea } from '../lib/geo'
 import { GlassCard } from './ui/GlassCard'
 import { RangeSlider } from './ui/RangeSlider'
 import { SectionHeader } from './ui/SectionHeader'
+import { ToggleRow } from './ui/ToggleRow'
 
 export const ScanSectorCard = ({
   zoneId,
@@ -25,6 +26,8 @@ export const ScanSectorCard = ({
   onClear,
   running,
   aoi,
+  geminiLocate,
+  onGeminiLocateChange,
 }) => {
   const selectedZone = ZONES.find((zone) => zone.id === zoneId)
   const hasSelection = Boolean(selectedZone || aoi)
@@ -126,6 +129,18 @@ export const ScanSectorCard = ({
           onChange={onConfidenceChange}
         />
       </div>
+
+      <div className="mt-2.5 rounded-lg border border-emerald-500/15 bg-emerald-400/[0.035] px-1.5 py-1">
+        <ToggleRow
+          label="Gemini locate barns"
+          checked={Boolean(geminiLocate)}
+          onChange={onGeminiLocateChange}
+          dotClass="bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.8)]"
+        />
+      </div>
+      <p className="mt-1.5 text-[8.5px] leading-relaxed text-slate-600">
+        Also scans the sector imagery with Gemini and boxes each barn it finds.
+      </p>
 
       <div className="mt-4 flex gap-2">
         <button
