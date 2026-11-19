@@ -402,6 +402,59 @@ button {
   min-height: 100dvh;
 }
 
+/* Login: plain surfaces and a restrained green palette, no glass or neon. */
+.login-page {
+  color-scheme: light;
+  background: #f4f6f2;
+  color: #16241b;
+}
+
+.login-brand {
+  background-color: #0a2a1b;
+  background-image:
+    linear-gradient(rgba(134, 239, 172, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(134, 239, 172, 0.035) 1px, transparent 1px);
+  background-size: 34px 34px;
+}
+
+.login-input {
+  width: 100%;
+  border: 1px solid #cbd6cc;
+  border-radius: 0.4rem;
+  background: #ffffff;
+  padding: 0.65rem 0.8rem;
+  color: #16241b;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  outline: none;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    background 150ms ease;
+}
+
+.login-input::placeholder {
+  color: #8a988e;
+}
+
+.login-input:hover {
+  border-color: #9fb5a5;
+}
+
+.login-input:focus {
+  border-color: #1f8a4c;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(31, 138, 76, 0.14);
+}
+
+.login-input:-webkit-autofill,
+.login-input:-webkit-autofill:hover,
+.login-input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #16241b;
+  -webkit-box-shadow: 0 0 0 1000px #ffffff inset;
+  transition: background-color 9999s ease-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
