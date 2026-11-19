@@ -22,8 +22,9 @@ npm run preview
 
 1. Import this GitHub repository in Vercel.
 2. Use the repository root as the project root.
-3. Vercel should detect Vite. If not, use:
-   - Build command: `npm run build`
+3. Vercel should detect Vite. The repo also pins these in `vercel.json`:
+   - Install command: `npm ci`
+   - Build command: `npm ci && npm run build`
    - Output directory: `dist`
 4. No environment variables are required. `vercel.json` proxies `/api/*` and `/health/*` to the Azure backend, avoiding CORS issues.
 5. Deploy. Vercel will provide a public URL such as `https://<project>.vercel.app`.
