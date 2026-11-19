@@ -85,6 +85,10 @@ export const LoginScreen = ({ onSubmit, pending, error }) => {
             </span>
           </p>
         </div>
+
+        <p className="mt-3 text-center text-[9px] tracking-[0.08em] text-emerald-200/40">
+          Agricultural Data Science &amp; Engineering
+        </p>
       </div>
     </div>
   )
