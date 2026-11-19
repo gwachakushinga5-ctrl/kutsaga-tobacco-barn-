@@ -5,6 +5,10 @@ const TILE_SIZE = 256
 
 export const IMAGERY_TILE_SIZE = TILE_SIZE
 
+// Enough context to recognise a barn, while keeping the candidate pixel at the
+// exact centre. At Z19 this is roughly 180 m across at the project latitude.
+export const BARN_CROP_SIZE = 640
+
 export const captureCenteredGrid = async (lat, lng, zoom = 18, grid = 3) => {
   const z = Math.max(0, Math.min(19, Math.floor(zoom)))
   const fraction = latLngToTileFraction(lat, lng, z)
@@ -63,7 +67,7 @@ export const captureTileGrid = async (lat, lng, zoom = 18, grid = 3) =>
 // Unlike captureCenteredGrid, this keeps the requested lat/lng at the exact
 // pixel centre of the returned image. That matters when asking Gemini whether
 // the structure at the centre is a barn.
-export const captureCenteredCrop = async (lat, lng, { zoom = 19, size = 512 } = {}) => {
+export const captureCenteredCrop = async (lat, lng, { zoom = 19, size = BARN_CROP_SIZE } = {}) => {
   const z = Math.max(0, Math.min(19, Math.floor(zoom)))
   const dimension = Math.max(128, Math.floor(size))
   const fraction = latLngToTileFraction(lat, lng, z)

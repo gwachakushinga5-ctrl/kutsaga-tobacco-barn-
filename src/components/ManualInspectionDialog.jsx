@@ -15,7 +15,12 @@ const confidenceClass = {
   low: 'border-slate-500/70 text-slate-400',
 }
 
-const prepareBox = (item) => {
+const CENTER_TOLERANCE = 60
+const MIN_LONG_EDGE = 45
+const MIN_SHORT_EDGE = 18
+const MAX_ASPECT = 5
+
+const prepareBox = (item, requireCenter = false) => {
   const values = (item?.box_2d ?? []).map((value) => {
     const number = Number(value)
     if (!Number.isFinite(number)) return 0
@@ -26,6 +31,24 @@ const prepareBox = (item) => {
   let [yMin, xMin, yMax, xMax] = values
   if (xMax <= xMin || yMax <= yMin) [xMin, yMin, xMax, yMax] = values
   if (xMax <= xMin || yMax <= yMin) return null
+
+  if (requireCenter) {
+    const width = xMax - xMin
+    const height = yMax - yMin
+    const longEdge = Math.max(width, height)
+    const shortEdge = Math.min(width, height)
+    if (longEdge < MIN_LONG_EDGE || shortEdge < MIN_SHORT_EDGE) return null
+    if (longEdge / shortEdge > MAX_ASPECT) return null
+    if (
+      xMin - CENTER_TOLERANCE > 500 ||
+      xMax + CENTER_TOLERANCE < 500 ||
+      yMin - CENTER_TOLERANCE > 500 ||
+      yMax + CENTER_TOLERANCE < 500
+    ) {
+      return null
+    }
+  }
+
   return { ...item, box_2d: [yMin, xMin, yMax, xMax] }
 }
 
@@ -48,7 +71,7 @@ export const ManualInspectionDialog = ({ point, onClose, onCaptureMapArea }) => 
     setAnalysisError('')
     setVerificationNote('')
 
-    captureCenteredCrop(point.lat, point.lng, { zoom: 19, size: 512 })
+    captureCenteredCrop(point.lat, point.lng, { zoom: 19 })
       .then((captured) => {
         if (active) setImageUrl(captured.src)
       })
@@ -106,7 +129,9 @@ export const ManualInspectionDialog = ({ point, onClose, onCaptureMapArea }) => 
       }
 
       const detected = await analyzeBarnImage(source, apiKey)
-      const prepared = detected.map(prepareBox).filter(Boolean)
+      const prepared = detected
+        .map((item) => prepareBox(item, mode === 'crop'))
+        .filter(Boolean)
       setBoxes(prepared)
       if (mode === 'map') setVerificationNote('Map area search — centre check not applicable')
       if (!prepared.length) {

@@ -7,7 +7,7 @@ export const BARN_DETECTION_PROMPT = `Analyze this top-down high-resolution sate
 Include only structures that are:
 - Rectangular or elongated boxy buildings, often in neat rows, clusters, or batteries next to grading sheds and farm tracks.
 - Clearly roofed with pitched or gable roofs (corrugated metal, asbestos, or dark weathered roofing) and visible tall-wall shadow edges.
-- At least about 8 metres long — do not count small sheds.
+- At least about 8 metres long — do not count small sheds. Box the visible roof footprint only, not its shadow or the surrounding yard.
 
 Strict exclusions (do NOT detect):
 - Small circular thatched huts (rondavels), scattered village dwellings, or fenced residential homesteads.
@@ -20,9 +20,11 @@ Return tight, individual bounding boxes around each separate barn structure — 
 - label: "barn"
 Return [] if there are no clear barns.`
 
-export const BARN_VERIFY_PROMPT = `Look at the EXACT CENTRE of this top-down satellite image. Is the structure at the centre a tobacco curing barn or a large agricultural barn?
+export const BARN_VERIFY_PROMPT = `Treat the EXACT CENTRE of this image as a pin. Is the object directly under that pin a tobacco curing barn or a large agricultural barn?
 
-Answer true only if it is clearly a roofed barn building at least about 8 metres long. Answer false for houses, huts, small sheds, tanks, trees, kraals, vehicles, shadows, bare ground, or anything uncertain.
+Answer true only if the pin lands on a clearly roofed barn building at least about 8 metres long. Answer false for houses, huts, small sheds, tanks, trees, kraals, vehicles, shadows, bare ground, or anything uncertain.
+
+Use confidence "high" only when unmistakable, "medium" when likely, and "low" when uncertain. Low-confidence answers must still set is_barn to false.
 
 Return strictly JSON: {"is_barn": true|false, "reason": "short reason", "confidence": "high"|"medium"|"low"}`
 
@@ -130,9 +132,10 @@ export const analyzeBarnImage = async (imageUrl, apiKey = getGeminiKey()) => {
 
 export const verifyBarnAtCenter = async (imageUrl, apiKey = getGeminiKey()) => {
   const parsed = await requestJson(imageUrl, apiKey, BARN_VERIFY_PROMPT)
+  const confidence = String(parsed?.confidence ?? 'low').toLowerCase()
   return {
-    isBarn: parsed?.is_barn === true,
+    isBarn: parsed?.is_barn === true && confidence !== 'low',
     reason: typeof parsed?.reason === 'string' ? parsed.reason : '',
-    confidence: parsed?.confidence ?? 'low',
+    confidence,
   }
 }

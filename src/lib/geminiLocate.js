@@ -43,6 +43,49 @@ const closestBox = (items, targetX = 500, targetY = 500) =>
     .filter(Boolean)
     .sort((a, b) => a.distance - b.distance)[0] ?? null
 
+// For the centred crop the candidate is at (500,500). Require the chosen box
+// to actually cover that point and have a plausible barn footprint.
+const CENTER_TOLERANCE = 60
+const MIN_LONG_EDGE = 45
+const MIN_SHORT_EDGE = 18
+const MAX_ASPECT = 5
+
+const centeredBox = (items, targetX = 500, targetY = 500) =>
+  items
+    .map((item) => {
+      const values = (item?.box_2d ?? []).map(normalizeBoxValue)
+      if (values.length !== 4) return null
+      let [yMin, xMin, yMax, xMax] = values
+      if (xMax <= xMin || yMax <= yMin) [xMin, yMin, xMax, yMax] = values
+      if (xMax <= xMin || yMax <= yMin) return null
+
+      const width = xMax - xMin
+      const height = yMax - yMin
+      const longEdge = Math.max(width, height)
+      const shortEdge = Math.min(width, height)
+      if (longEdge < MIN_LONG_EDGE || shortEdge < MIN_SHORT_EDGE) return null
+      if (longEdge / shortEdge > MAX_ASPECT) return null
+      if (
+        xMin - CENTER_TOLERANCE > targetX ||
+        xMax + CENTER_TOLERANCE < targetX ||
+        yMin - CENTER_TOLERANCE > targetY ||
+        yMax + CENTER_TOLERANCE < targetY
+      ) {
+        return null
+      }
+
+      return {
+        xMin,
+        yMin,
+        xMax,
+        yMax,
+        confidence: item.confidence ?? 'low',
+        distance: Math.hypot((xMin + xMax) / 2 - targetX, (yMin + yMax) / 2 - targetY),
+      }
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.distance - b.distance)[0] ?? null
+
 const gridToLocation = (box, grid) => {
   const toLatLng = (x, y) => {
     const fractionX = grid.originX + (x / 1000) * (grid.width / IMAGERY_TILE_SIZE)
@@ -106,12 +149,12 @@ const applyLocation = (detection, location, trbRegistry, verification) => {
 }
 
 const verifyCandidate = async (detection, apiKey, trbRegistry) => {
-  const crop = await captureCenteredCrop(detection.lat, detection.lng, { zoom: 19, size: 512 })
+  const crop = await captureCenteredCrop(detection.lat, detection.lng, { zoom: 19 })
   const verification = await verifyBarnAtCenter(crop.src, apiKey)
   if (!verification.isBarn) return null
 
   const items = await analyzeBarnImage(crop.src, apiKey)
-  const box = closestBox(items)
+  const box = centeredBox(items)
   if (!box) return null
 
   const location = gridToLocation(box, crop)
@@ -146,8 +189,8 @@ export const locateBarnsInBounds = async ({
   label,
   apiKey,
   trbRegistry = [],
-  zoom = 17,
-  maxTiles = 49,
+  zoom = 18,
+  maxTiles = 64,
 }) => {
   if (!apiKey) throw new Error('Add a Gemini API key first')
   if (!bounds) throw new Error('No scan bounds available')

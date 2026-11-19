@@ -22,6 +22,11 @@ const normalizeBoxValue = (value) => {
   return Math.min(1000, Math.max(0, scaled))
 }
 
+const CENTER_TOLERANCE = 60
+const MIN_LONG_EDGE = 45
+const MIN_SHORT_EDGE = 18
+const MAX_ASPECT = 5
+
 const prepareBox = (item) => {
   const values = (item?.box_2d ?? []).map(normalizeBoxValue)
   if (values.length !== 4) return null
@@ -32,6 +37,21 @@ const prepareBox = (item) => {
     ;[xMin, yMin, xMax, yMax] = values
   }
   if (xMax <= xMin || yMax <= yMin) return null
+
+  const width = xMax - xMin
+  const height = yMax - yMin
+  const longEdge = Math.max(width, height)
+  const shortEdge = Math.min(width, height)
+  if (longEdge < MIN_LONG_EDGE || shortEdge < MIN_SHORT_EDGE) return null
+  if (longEdge / shortEdge > MAX_ASPECT) return null
+  if (
+    xMin - CENTER_TOLERANCE > 500 ||
+    xMax + CENTER_TOLERANCE < 500 ||
+    yMin - CENTER_TOLERANCE > 500 ||
+    yMax + CENTER_TOLERANCE < 500
+  ) {
+    return null
+  }
 
   return {
     xMin,
@@ -87,7 +107,7 @@ export const Z18Crop = ({ detectionId, lat, lng, color = '#22d3ee' }) => {
       try {
         // Pixel-centred crop: the candidate coordinate is exactly at (500,500)
         // in the image, so the centre check refers to this candidate only.
-        const captured = await captureCenteredCrop(lat, lng, { zoom: 19, size: 512 })
+        const captured = await captureCenteredCrop(lat, lng, { zoom: 19 })
         if (!active) return
         setCrop({ src: captured.src, local: true })
         setStatus('ready')
