@@ -2,8 +2,8 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "vite",
   "installCommand": "npm ci",
-  "buildCommand": "npm ci && npm run build",
-  "outputDirectory": "dist",
+  "buildCommand": "npm ci && npm run build && node scripts/vercel-build.mjs",
+  "outputDirectory": ".vercel/output/static",
   "rewrites": [
     {
       "source": "/api/:path*",

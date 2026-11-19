@@ -24,8 +24,8 @@ npm run preview
 2. Use the repository root as the project root.
 3. Vercel should detect Vite. The repo also pins these in `vercel.json`:
    - Install command: `npm ci`
-   - Build command: `npm ci && npm run build`
-   - Output directory: `dist`
+   - Build command: `npm ci && npm run build && node scripts/vercel-build.mjs`
+   - Output directory: `.vercel/output/static` (Vercel Build Output API)
 4. No environment variables are required. `vercel.json` proxies `/api/*` and `/health/*` to the Azure backend, avoiding CORS issues.
 5. Deploy. Vercel will provide a public URL such as `https://<project>.vercel.app`.
 
