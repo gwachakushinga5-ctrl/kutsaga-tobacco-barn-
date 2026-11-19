@@ -402,57 +402,31 @@ button {
   min-height: 100dvh;
 }
 
-/* Login: plain surfaces and a restrained green palette, no glass or neon. */
-.login-page {
-  color-scheme: light;
-  background: #f4f6f2;
-  color: #16241b;
+/* Login-only colour override: keeps the original layout and components. */
+.login-green .glass-card {
+  border-color: rgba(52, 211, 153, 0.18);
+  background:
+    linear-gradient(180deg, rgba(16, 101, 60, 0.22) 0%, rgba(4, 23, 13, 0) 30%),
+    rgba(5, 24, 14, 0.92);
+  box-shadow:
+    0 24px 60px -18px rgba(0, 0, 0, 0.8),
+    0 1px 0 0 rgba(110, 231, 183, 0.07) inset;
 }
 
-.login-brand {
-  background-color: #0a2a1b;
-  background-image:
-    linear-gradient(rgba(134, 239, 172, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(134, 239, 172, 0.035) 1px, transparent 1px);
-  background-size: 34px 34px;
+.login-green .kutsaga-select {
+  border-color: #244b33;
+  background: rgba(2, 20, 10, 0.62);
+  color: #d1fae5;
 }
 
-.login-input {
-  width: 100%;
-  border: 1px solid #cbd6cc;
-  border-radius: 0.4rem;
-  background: #ffffff;
-  padding: 0.65rem 0.8rem;
-  color: #16241b;
-  font-size: 0.875rem;
-  line-height: 1.25rem;
-  outline: none;
-  transition:
-    border-color 150ms ease,
-    box-shadow 150ms ease,
-    background 150ms ease;
+.login-green .kutsaga-select:hover {
+  border-color: #357a4f;
+  background: rgba(2, 20, 10, 0.82);
 }
 
-.login-input::placeholder {
-  color: #8a988e;
-}
-
-.login-input:hover {
-  border-color: #9fb5a5;
-}
-
-.login-input:focus {
-  border-color: #1f8a4c;
-  background: #ffffff;
-  box-shadow: 0 0 0 3px rgba(31, 138, 76, 0.14);
-}
-
-.login-input:-webkit-autofill,
-.login-input:-webkit-autofill:hover,
-.login-input:-webkit-autofill:focus {
-  -webkit-text-fill-color: #16241b;
-  -webkit-box-shadow: 0 0 0 1000px #ffffff inset;
-  transition: background-color 9999s ease-out;
+.login-green .kutsaga-select:focus {
+  border-color: rgba(52, 211, 153, 0.68);
+  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.12);
 }
 
 @media (prefers-reduced-motion: reduce) {
