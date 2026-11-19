@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { Loader2, LockKeyhole, LogIn, TriangleAlert } from 'lucide-react'
+import { Eye, EyeOff, Loader2, LockKeyhole, LogIn, TriangleAlert } from 'lucide-react'
 import { API_BASE_URL, API_KEY } from '../services/api'
 import { Logo } from './ui/Logo'
 
 export const LoginScreen = ({ onSubmit, pending, error }) => {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
 
   const handleSubmit = (event) => {
     event.preventDefault()
@@ -45,15 +46,26 @@ export const LoginScreen = ({ onSubmit, pending, error }) => {
             >
               Password
             </label>
-            <input
-              id="login-password"
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              className="kutsaga-select mt-1"
-              placeholder="••••••••"
-            />
+            <div className="relative mt-1">
+              <input
+                id="login-password"
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                className="kutsaga-select"
+                placeholder="••••••••"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((visible) => !visible)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                aria-pressed={showPassword}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-emerald-200/50 transition-colors hover:text-emerald-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
+              >
+                {showPassword ? <EyeOff size={13} /> : <Eye size={13} />}
+              </button>
+            </div>
           </div>
 
           {error ? (
