@@ -1,12 +1,11 @@
-const DEFAULT_BASE_URL =
-  'https://kutsaga-app.livelybush-d14e9c76.switzerlandnorth.azurecontainerapps.io'
+// Same origin by default: the Vite dev/preview proxy and Vercel rewrites both
+// forward /api and /health to the deployed backend. Set VITE_API_BASE_URL only
+// when serving the built files without a proxy.
+const DEFAULT_BASE_URL = ''
 
 const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL
 
-// An empty VITE_API_BASE_URL means "same origin" (use the Vite dev/preview proxy).
-export const API_BASE_URL = (
-  configuredBaseUrl === undefined ? DEFAULT_BASE_URL : configuredBaseUrl
-).replace(/\/+$/, '')
+export const API_BASE_URL = (configuredBaseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, '')
 
 export const API_KEY = (import.meta.env.VITE_API_KEY || '').trim()
 
