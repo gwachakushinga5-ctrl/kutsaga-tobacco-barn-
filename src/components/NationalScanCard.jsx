@@ -1,7 +1,6 @@
 import {
   Activity,
   ChevronRight,
-  EyeOff,
   Globe,
   Loader2,
   LockKeyhole,
@@ -90,14 +89,14 @@ export const NationalScanCard = ({
             it refreshes automatically.
           </span>
         </div>
-        <div className="mt-2 grid grid-cols-3 gap-1.5">
+        <div className="mt-2 flex items-stretch gap-1.5">
           <button
             type="button"
             onClick={onWatchGlobal}
-            className="flex items-center justify-center gap-1 rounded-lg border border-cyan-500/30 bg-cyan-500/[0.07] px-1.5 py-2 text-[7.5px] font-semibold uppercase tracking-[0.06em] text-cyan-300 transition hover:bg-cyan-500/15"
+            className="flex h-8 min-w-0 flex-1 items-center justify-center gap-1 rounded-lg border border-cyan-500/30 bg-cyan-500/[0.07] px-1.5 text-[7.5px] font-semibold uppercase tracking-[0.06em] text-cyan-300 transition hover:bg-cyan-500/15"
           >
             <Activity size={10} />
-            Watch waiting
+            <span className="truncate">Watch waiting</span>
           </button>
           <button
             type="button"
@@ -107,23 +106,25 @@ export const NationalScanCard = ({
                 ? 'Pause dashboard polling only; the Azure scan keeps running'
                 : 'Resume live review polling'
             }
-            className={`flex items-center justify-center gap-1 rounded-lg border px-1.5 py-2 text-[7.5px] font-semibold uppercase tracking-[0.06em] transition ${
+            className={`flex h-8 min-w-0 flex-1 items-center justify-center gap-1 rounded-lg border px-1.5 text-[7.5px] font-semibold uppercase tracking-[0.06em] transition ${
               livePollingEnabled
                 ? 'border-slate-700/70 bg-slate-900/60 text-slate-300 hover:border-slate-600 hover:text-slate-100'
                 : 'border-emerald-500/35 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20'
             }`}
           >
             {livePollingEnabled ? <Pause size={10} /> : <Play size={10} />}
-            {livePollingEnabled ? 'Stop watching' : 'Resume watching'}
+            <span className="truncate">
+              {livePollingEnabled ? 'Stop watching' : 'Resume watching'}
+            </span>
           </button>
           <button
             type="button"
             onClick={onDeleteWaiting}
+            aria-label="Delete waiting candidates"
             title="Delete waiting candidates from this browser queue only"
-            className="flex items-center justify-center gap-1 rounded-lg border border-red-500/25 bg-red-500/[0.06] px-1.5 py-2 text-[7.5px] font-semibold uppercase tracking-[0.06em] text-red-300 transition hover:bg-red-500/15"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-red-500/25 bg-red-500/[0.06] text-red-300 transition hover:bg-red-500/15"
           >
-            <Trash2 size={10} />
-            Delete waiting
+            <Trash2 size={12} />
           </button>
         </div>
         {!livePollingEnabled ? (
@@ -159,14 +160,14 @@ export const NationalScanCard = ({
         }
       />
 
-      <div className="mt-2.5 grid grid-cols-3 gap-1.5">
+      <div className="mt-2.5 flex items-stretch gap-1.5">
         <button
           type="button"
           onClick={onWatchGlobal}
-          className="flex items-center justify-center gap-1 rounded-lg border border-cyan-500/30 bg-cyan-500/[0.07] px-1.5 py-2 text-[7.5px] font-semibold uppercase tracking-[0.06em] text-cyan-300 transition hover:bg-cyan-500/15"
+          className="flex h-8 min-w-0 flex-1 items-center justify-center gap-1 rounded-lg border border-cyan-500/30 bg-cyan-500/[0.07] px-1.5 text-[7.5px] font-semibold uppercase tracking-[0.06em] text-cyan-300 transition hover:bg-cyan-500/15"
         >
           <Activity size={10} />
-          Watch waiting
+          <span className="truncate">Watch waiting</span>
         </button>
         <button
           type="button"
@@ -176,23 +177,25 @@ export const NationalScanCard = ({
               ? 'Pause dashboard polling only; the Azure scan keeps running'
               : 'Resume live review polling'
           }
-          className={`flex items-center justify-center gap-1 rounded-lg border px-1.5 py-2 text-[7.5px] font-semibold uppercase tracking-[0.06em] transition ${
+          className={`flex h-8 min-w-0 flex-1 items-center justify-center gap-1 rounded-lg border px-1.5 text-[7.5px] font-semibold uppercase tracking-[0.06em] transition ${
             livePollingEnabled
               ? 'border-slate-700/70 bg-slate-900/60 text-slate-300 hover:border-slate-600 hover:text-slate-100'
               : 'border-emerald-500/35 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20'
           }`}
         >
           {livePollingEnabled ? <Pause size={10} /> : <Play size={10} />}
-          {livePollingEnabled ? 'Stop watching' : 'Resume watching'}
+          <span className="truncate">
+            {livePollingEnabled ? 'Stop watching' : 'Resume watching'}
+          </span>
         </button>
         <button
           type="button"
           onClick={onDeleteWaiting}
+          aria-label="Delete waiting candidates"
           title="Delete waiting candidates from this browser queue only"
-          className="flex items-center justify-center gap-1 rounded-lg border border-red-500/25 bg-red-500/[0.06] px-1.5 py-2 text-[7.5px] font-semibold uppercase tracking-[0.06em] text-red-300 transition hover:bg-red-500/15"
+          className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-red-500/25 bg-red-500/[0.06] text-red-300 transition hover:bg-red-500/15"
         >
-          <Trash2 size={10} />
-          Delete waiting
+          <Trash2 size={12} />
         </button>
       </div>
       {!livePollingEnabled ? (
@@ -351,11 +354,11 @@ export const NationalScanCard = ({
                     <button
                       type="button"
                       onClick={() => onHideJob(job.job_id)}
+                      aria-label={`Hide macro job ${job.name || job.job_id}`}
                       title="Hide this macro job from the list; the backend job is unchanged"
-                      className="flex items-center gap-1 rounded border border-red-500/25 bg-red-500/[0.06] px-1.5 py-0.5 text-[7.5px] font-semibold uppercase tracking-[0.1em] text-red-300 transition hover:bg-red-500/15"
+                      className="grid h-[18px] w-[18px] shrink-0 place-items-center rounded border border-red-500/25 bg-red-500/[0.06] text-red-300 transition hover:bg-red-500/15"
                     >
-                      <EyeOff size={8} />
-                      Delete
+                      <Trash2 size={9} />
                     </button>
                     {isResumableMacroJob(job) ? (
                       <button
@@ -387,8 +390,8 @@ export const NationalScanCard = ({
           )}
         </div>
         <p className="mt-2 font-mono text-[7px] leading-relaxed text-slate-600">
-          Delete hides items in this browser only; it does not cancel Azure jobs or change backend
-          verdicts.
+          Trash icons hide items in this browser only; they do not cancel Azure jobs or change
+          backend verdicts.
         </p>
       </div>
     </GlassCard>
