@@ -316,6 +316,17 @@ const Dashboard = ({ user, onSignOut }) => {
     [macro.jobs],
   )
   const seenMacroIds = useRef(null)
+  const pollRegistry = dashboard.pollRegistry
+  const scanJobId = dashboard.scanJobId
+  const hasActiveMacro = useMemo(
+    () =>
+      macro.jobs.some((job) =>
+        ['PENDING', 'RUNNING', 'QUEUED', 'STARTING'].includes(
+          String(job.status ?? '').toUpperCase(),
+        ),
+      ),
+    [macro.jobs],
+  )
 
   useEffect(() => {
     if (seenMacroIds.current === null) {
@@ -330,6 +341,16 @@ const Dashboard = ({ user, onSignOut }) => {
     dashboard.refresh(newlyCompleted)
     dashboard.addToast('Macro scan results loaded into the review queue', 'success')
   }, [completedMacroIds, dashboard])
+
+  useEffect(() => {
+    if (!hasActiveMacro || !scanJobId) return undefined
+    const poll = () => {
+      if (!document.hidden) pollRegistry(scanJobId)
+    }
+    poll()
+    const timer = window.setInterval(poll, 4000)
+    return () => window.clearInterval(timer)
+  }, [hasActiveMacro, pollRegistry, scanJobId])
 
   useEffect(() => {
     if (!taxonomySelection?.autoSubmit || !taxonomySelection.code) return

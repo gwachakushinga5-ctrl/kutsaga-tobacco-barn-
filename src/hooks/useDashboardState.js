@@ -332,6 +332,38 @@ export const useDashboardState = () => {
     return () => window.clearInterval(timer)
   }, [refreshCounts])
 
+  const pollRegistry = useCallback(
+    async (jobId = scanJobId) => {
+      try {
+        const spatialParams = bboxFilter ? { bbox: bboxFilter } : {}
+        const [globalList, globalCounts, currentList, currentCounts] = await Promise.all([
+          loadCandidates({ scope: 'all', ...spatialParams }),
+          loadCounts({ scope: 'all' }),
+          jobId
+            ? loadCandidates({ scan_job_id: jobId, ...spatialParams })
+            : Promise.resolve(null),
+          jobId ? loadCounts({ scan_job_id: jobId }) : Promise.resolve(INITIAL_COUNTS),
+        ])
+
+        setDetections(globalList)
+        setCountsByScope((current) => ({
+          ...current,
+          global: globalCounts,
+          current: currentCounts,
+        }))
+        if (currentList) {
+          setScanDetections((current) => [
+            ...current.filter((detection) => detection.source === 'gemini'),
+            ...currentList,
+          ])
+        }
+      } catch {
+        // Live registry polling is best-effort; the next manual refresh reloads it.
+      }
+    },
+    [bboxFilter, loadCandidates, loadCounts, scanJobId],
+  )
+
   const activateJob = useCallback(
     (jobId) => {
       setScanJobId(jobId)
@@ -683,6 +715,7 @@ export const useDashboardState = () => {
     loading,
     refresh,
     refreshCounts,
+    pollRegistry,
     activateJob,
     selectedDetection,
     selectedId,

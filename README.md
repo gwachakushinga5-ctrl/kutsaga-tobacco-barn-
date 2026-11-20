@@ -37,6 +37,7 @@ Gemini keys are stored in the browser and entered from inside the app; they are 
 - Candidate markers and queue rows are colour-coded by review state: amber = waiting, blue = confirmed, red = rejected, purple = uncertain.
 - Use the row buttons or keyboard shortcuts while a candidate is selected: **C** confirms, **R** opens the frozen rejection taxonomy and submits the verdict.
 - Counters poll the backend every 8 seconds while the dashboard is visible. Macro job progress polls every 5 seconds while a job is active.
+- While a macro job is active, detected candidates are polled every 4 seconds, so the map and approval queue fill up during the scan. Use **Watch live** on an active job to jump into its results.
 - **Spatial prefilter · map view** sends the current Leaflet bounds as the backend candidates `bbox` filter, limiting registry results to the visible area.
 
 The PostGIS schema, YOLOv8 batch worker, and FastAPI endpoints are provided by the deployed Azure backend; this repository is the frontend client only.
