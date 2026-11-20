@@ -16,7 +16,7 @@ const mergeJobs = (incoming, current) => {
   )
 }
 
-export const useMacroScans = ({ addToast, enabled = true }) => {
+export const useMacroScans = ({ addToast, enabled = true, pollingEnabled = true }) => {
   const [boundaries, setBoundaries] = useState([])
   const [jobs, setJobs] = useState([])
   const [selectedBoundaryId, setSelectedBoundaryId] = useState('')
@@ -88,14 +88,14 @@ export const useMacroScans = ({ addToast, enabled = true }) => {
   }, [enabled, selectedBoundaryId])
 
   useEffect(() => {
-    if (!enabled) return undefined
+    if (!enabled || !pollingEnabled) return undefined
     const hasActiveJob = jobs.some(isActiveMacroJob)
     const interval = window.setInterval(
       () => loadJobs({ quiet: true }),
       hasActiveJob ? 5000 : 15000,
     )
     return () => window.clearInterval(interval)
-  }, [enabled, jobs, loadJobs])
+  }, [enabled, pollingEnabled, jobs, loadJobs])
 
   const launch = useCallback(
     async (confidence) => {

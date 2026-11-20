@@ -55,6 +55,7 @@ export const ApprovalQueueCard = ({
   onExport,
   exporting,
   live,
+  onToggleLivePolling,
 }) => {
   const tabs = [
     { value: 'global', label: 'Global Registry' },
@@ -69,11 +70,14 @@ export const ApprovalQueueCard = ({
         subtitle="Persistent registry. Click a row to inspect its Z18 crop."
         right={
           <div className="flex shrink-0 items-center gap-1.5">
-            <span
-              className={`flex items-center gap-1 rounded-full border px-1.5 py-0.5 font-mono text-[7.5px] uppercase tracking-[0.12em] ${
+            <button
+              type="button"
+              onClick={onToggleLivePolling}
+              title={live ? 'Pause live polling' : 'Resume live polling'}
+              className={`flex items-center gap-1 rounded-full border px-1.5 py-0.5 font-mono text-[7.5px] uppercase tracking-[0.12em] transition ${
                 live
-                  ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
-                  : 'border-slate-700/70 bg-slate-900/60 text-slate-500'
+                  ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20'
+                  : 'border-slate-700/70 bg-slate-900/60 text-slate-500 hover:border-slate-600 hover:text-slate-300'
               }`}
             >
               <span
@@ -81,8 +85,8 @@ export const ApprovalQueueCard = ({
                   live ? 'animate-pulse bg-emerald-300' : 'bg-slate-600'
                 }`}
               />
-              Live
-            </span>
+              {live ? 'Live' : 'Paused'}
+            </button>
             <button
               type="button"
               onClick={onRemoveAll}

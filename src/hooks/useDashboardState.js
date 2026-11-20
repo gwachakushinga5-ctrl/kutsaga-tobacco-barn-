@@ -90,7 +90,7 @@ const mostRecentJobId = (detections, explicitJobId) => {
   return best
 }
 
-export const useDashboardState = () => {
+export const useDashboardState = ({ livePollingEnabled = true } = {}) => {
   const [detections, setDetections] = useState([])
   const [scanDetections, setScanDetections] = useState([])
   const [trbRegistry, setTrbRegistry] = useState([])
@@ -326,11 +326,12 @@ export const useDashboardState = () => {
   }, [loadCounts, scanJobId])
 
   useEffect(() => {
+    if (!livePollingEnabled) return undefined
     const timer = window.setInterval(() => {
       if (!document.hidden) refreshCounts()
     }, 8000)
     return () => window.clearInterval(timer)
-  }, [refreshCounts])
+  }, [livePollingEnabled, refreshCounts])
 
   const pollRegistry = useCallback(
     async (jobId = scanJobId) => {

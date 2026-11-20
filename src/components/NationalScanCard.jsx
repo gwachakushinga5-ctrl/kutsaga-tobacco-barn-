@@ -5,6 +5,7 @@ import {
   Loader2,
   LockKeyhole,
   MapPin,
+  Pause,
   Play,
   RotateCw,
   TriangleAlert,
@@ -53,8 +54,10 @@ export const NationalScanCard = ({
   canLaunch,
   restricted,
   role,
+  livePollingEnabled,
   onLaunch,
   onWatchGlobal,
+  onToggleLivePolling,
   onResume,
   onActivateJob,
   onFitBounds,
@@ -83,14 +86,38 @@ export const NationalScanCard = ({
             it refreshes automatically.
           </span>
         </div>
-        <button
-          type="button"
-          onClick={onWatchGlobal}
-          className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/[0.07] px-3 py-2 text-[9px] font-semibold uppercase tracking-[0.11em] text-cyan-300 transition hover:bg-cyan-500/15"
-        >
-          <Activity size={10} />
-          Watch waiting candidates
-        </button>
+        <div className="mt-2 grid grid-cols-2 gap-1.5">
+          <button
+            type="button"
+            onClick={onWatchGlobal}
+            className="flex items-center justify-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/[0.07] px-2 py-2 text-[8.5px] font-semibold uppercase tracking-[0.09em] text-cyan-300 transition hover:bg-cyan-500/15"
+          >
+            <Activity size={10} />
+            Watch waiting
+          </button>
+          <button
+            type="button"
+            onClick={onToggleLivePolling}
+            title={
+              livePollingEnabled
+                ? 'Pause dashboard polling only; the Azure scan keeps running'
+                : 'Resume live review polling'
+            }
+            className={`flex items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-[8.5px] font-semibold uppercase tracking-[0.09em] transition ${
+              livePollingEnabled
+                ? 'border-slate-700/70 bg-slate-900/60 text-slate-300 hover:border-slate-600 hover:text-slate-100'
+                : 'border-emerald-500/35 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20'
+            }`}
+          >
+            {livePollingEnabled ? <Pause size={10} /> : <Play size={10} />}
+            {livePollingEnabled ? 'Stop watching' : 'Resume watching'}
+          </button>
+        </div>
+        {!livePollingEnabled ? (
+          <p className="mt-1.5 rounded-md border border-slate-700/70 bg-slate-900/50 px-2 py-1.5 font-mono text-[7.5px] leading-relaxed text-slate-500">
+            Live review polling is paused. The Azure scan continues in the background.
+          </p>
+        ) : null}
       </GlassCard>
     )
   }
@@ -119,14 +146,38 @@ export const NationalScanCard = ({
         }
       />
 
-      <button
-        type="button"
-        onClick={onWatchGlobal}
-        className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/[0.07] px-3 py-2 text-[9px] font-semibold uppercase tracking-[0.11em] text-cyan-300 transition hover:bg-cyan-500/15"
-      >
-        <Activity size={10} />
-        Watch waiting candidates
-      </button>
+      <div className="mt-2.5 grid grid-cols-2 gap-1.5">
+        <button
+          type="button"
+          onClick={onWatchGlobal}
+          className="flex items-center justify-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/[0.07] px-2 py-2 text-[8.5px] font-semibold uppercase tracking-[0.09em] text-cyan-300 transition hover:bg-cyan-500/15"
+        >
+          <Activity size={10} />
+          Watch waiting
+        </button>
+        <button
+          type="button"
+          onClick={onToggleLivePolling}
+          title={
+            livePollingEnabled
+              ? 'Pause dashboard polling only; the Azure scan keeps running'
+              : 'Resume live review polling'
+          }
+          className={`flex items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-[8.5px] font-semibold uppercase tracking-[0.09em] transition ${
+            livePollingEnabled
+              ? 'border-slate-700/70 bg-slate-900/60 text-slate-300 hover:border-slate-600 hover:text-slate-100'
+              : 'border-emerald-500/35 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20'
+          }`}
+        >
+          {livePollingEnabled ? <Pause size={10} /> : <Play size={10} />}
+          {livePollingEnabled ? 'Stop watching' : 'Resume watching'}
+        </button>
+      </div>
+      {!livePollingEnabled ? (
+        <p className="mt-1.5 rounded-md border border-slate-700/70 bg-slate-900/50 px-2 py-1.5 font-mono text-[7.5px] leading-relaxed text-slate-500">
+          Live review polling is paused. The Azure scan continues in the background.
+        </p>
+      ) : null}
 
       <div className="mt-3">
         <label
