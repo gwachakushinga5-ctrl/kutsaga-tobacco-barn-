@@ -3,6 +3,7 @@ import {
   ChevronRight,
   Globe,
   Loader2,
+  LockKeyhole,
   MapPin,
   Play,
   RotateCw,
@@ -56,6 +57,7 @@ export const NationalScanCard = ({
   error,
   confidence,
   canLaunch,
+  restricted,
   onLaunch,
   onResume,
   onActivateJob,
@@ -64,6 +66,31 @@ export const NationalScanCard = ({
   const activeCount = jobs.filter((job) =>
     ACTIVE_STATUSES.has(String(job.status ?? '').toUpperCase()),
   ).length
+
+  if (restricted) {
+    return (
+      <GlassCard className="shrink-0 p-4">
+        <SectionHeader
+          icon={Globe}
+          title="National scan"
+          subtitle="Unattended Azure macro scan. Results flow into the review queue."
+          right={
+            <span className="flex items-center gap-1 rounded-full border border-slate-700/70 bg-slate-900/60 px-1.5 py-0.5 font-mono text-[7.5px] uppercase tracking-[0.12em] text-slate-500">
+              <LockKeyhole size={8} />
+              Admin
+            </span>
+          }
+        />
+        <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-500/25 bg-amber-500/[0.06] px-2.5 py-2 text-[9.5px] leading-relaxed text-amber-200/90">
+          <LockKeyhole size={11} className="mt-0.5 shrink-0 text-amber-400/80" />
+          <span>
+            National scan controls require an admin role. Ask an administrator to launch the
+            countrywide scan; its candidates will appear in the global review queue.
+          </span>
+        </div>
+      </GlassCard>
+    )
+  }
 
   return (
     <GlassCard className="shrink-0 p-4">

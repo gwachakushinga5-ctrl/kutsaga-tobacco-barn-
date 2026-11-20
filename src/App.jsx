@@ -64,7 +64,11 @@ const clampAoi = (points, bounds) => {
 
 const Dashboard = ({ user, onSignOut }) => {
   const dashboard = useDashboardState()
-  const macro = useMacroScans({ addToast: dashboard.addToast })
+  const canLaunchMacro = ['admin', 'api'].includes(String(user?.role ?? '').toLowerCase())
+  const macro = useMacroScans({
+    addToast: dashboard.addToast,
+    enabled: canLaunchMacro,
+  })
   const mapRef = useRef(null)
   const [layers, setLayers] = useState({
     trb: true,
@@ -83,7 +87,6 @@ const Dashboard = ({ user, onSignOut }) => {
 
   const selectedZone = ZONES.find((zone) => zone.id === zoneId) ?? null
   const running = dashboard.scanStatus === 'RUNNING'
-  const canLaunchMacro = ['admin', 'api'].includes(String(user?.role ?? '').toLowerCase())
 
   useEffect(() => {
     const onKeyDown = (event) => {
@@ -445,6 +448,7 @@ const Dashboard = ({ user, onSignOut }) => {
             error={macro.error}
             confidence={confidence}
             canLaunch={canLaunchMacro}
+            restricted={!canLaunchMacro}
             onLaunch={handleLaunchMacro}
             onResume={macro.resume}
             onActivateJob={dashboard.activateJob}

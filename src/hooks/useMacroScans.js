@@ -17,7 +17,7 @@ const mergeJobs = (incoming, current) => {
   )
 }
 
-export const useMacroScans = ({ addToast }) => {
+export const useMacroScans = ({ addToast, enabled = true }) => {
   const [boundaries, setBoundaries] = useState([])
   const [jobs, setJobs] = useState([])
   const [selectedBoundaryId, setSelectedBoundaryId] = useState('')
@@ -56,12 +56,22 @@ export const useMacroScans = ({ addToast }) => {
   }, [])
 
   useEffect(() => {
+    if (!enabled) {
+      setLoading(false)
+      setBoundaries([])
+      setJobs([])
+      setSelectedBoundaryId('')
+      setEstimate(null)
+      setError('')
+      return undefined
+    }
     loadBoundaries()
     loadJobs()
-  }, [loadBoundaries, loadJobs])
+    return undefined
+  }, [enabled, loadBoundaries, loadJobs])
 
   useEffect(() => {
-    if (!selectedBoundaryId) {
+    if (!enabled || !selectedBoundaryId) {
       setEstimate(null)
       return undefined
     }
@@ -76,9 +86,10 @@ export const useMacroScans = ({ addToast }) => {
       .finally(() => setEstimateLoading(false))
 
     return () => controller.abort()
-  }, [selectedBoundaryId])
+  }, [enabled, selectedBoundaryId])
 
   useEffect(() => {
+    if (!enabled) return undefined
     const hasActiveJob = jobs.some((job) =>
       ACTIVE_STATUSES.has(String(job.status ?? '').toUpperCase()),
     )
@@ -87,10 +98,14 @@ export const useMacroScans = ({ addToast }) => {
       hasActiveJob ? 5000 : 15000,
     )
     return () => window.clearInterval(interval)
-  }, [jobs, loadJobs])
+  }, [enabled, jobs, loadJobs])
 
   const launch = useCallback(
     async (confidence) => {
+      if (!enabled) {
+        addToast('Admin role required to launch national scans', 'error')
+        return null
+      }
       if (!selectedBoundaryId) {
         addToast('Select a national or provincial boundary first', 'error')
         return null
@@ -119,11 +134,15 @@ export const useMacroScans = ({ addToast }) => {
         setLaunching(false)
       }
     },
-    [addToast, estimate?.name, selectedBoundaryId],
+    [addToast, enabled, estimate?.name, selectedBoundaryId],
   )
 
   const resume = useCallback(
     async (jobId) => {
+      if (!enabled) {
+        addToast('Admin role required to resume national scans', 'error')
+        return false
+      }
       setResumingId(jobId)
       try {
         await resumeMacroScan(jobId)
@@ -137,7 +156,7 @@ export const useMacroScans = ({ addToast }) => {
         setResumingId('')
       }
     },
-    [addToast, loadJobs],
+    [addToast, enabled, loadJobs],
   )
 
   return {
