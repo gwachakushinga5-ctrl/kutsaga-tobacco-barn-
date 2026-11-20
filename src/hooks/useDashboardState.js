@@ -563,6 +563,30 @@ export const useDashboardState = ({ livePollingEnabled = true } = {}) => {
     addToast(`${all.length} barn${all.length === 1 ? '' : 's'} removed from the approval queue`, 'info')
   }, [addToast, detections, scanDetections])
 
+  const removeWaitingDetections = useCallback(() => {
+    const waiting = [...detections, ...scanDetections].filter(
+      (detection) => detection.status === 'waiting' && !dismissedIds.has(detection.id),
+    )
+    if (!waiting.length) {
+      addToast('No waiting candidates to delete', 'info')
+      return 0
+    }
+    setDismissedIds((current) => {
+      const next = new Set(current)
+      waiting.forEach((detection) => next.add(detection.id))
+      persistDismissed(next)
+      return next
+    })
+    setSelectedId((current) =>
+      waiting.some((detection) => detection.id === current) ? null : current,
+    )
+    addToast(
+      `${waiting.length} waiting candidate${waiting.length === 1 ? '' : 's'} deleted from this queue`,
+      'info',
+    )
+    return waiting.length
+  }, [addToast, detections, dismissedIds, scanDetections])
+
   const resetFilters = useCallback(() => {
     setStatusFilter('all')
     setTrbFilter('all')
@@ -724,6 +748,7 @@ export const useDashboardState = ({ livePollingEnabled = true } = {}) => {
     clearSelection: () => setSelectedId(null),
     removeDetection,
     removeAllDetections,
+    removeWaitingDetections,
     scanJobId,
     scanStatus,
     telemetry,

@@ -500,6 +500,8 @@ const Dashboard = ({ user, onSignOut }) => {
             onLaunch={handleLaunchMacro}
             onWatchGlobal={handleWatchGlobal}
             onToggleLivePolling={handleToggleLivePolling}
+            onDeleteWaiting={dashboard.removeWaitingDetections}
+            onHideJob={macro.hideJob}
             onResume={macro.resume}
             onActivateJob={handleActivateJob}
             onFitBounds={fitMacroBounds}

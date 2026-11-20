@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { isActiveMacroJob } from '../lib/macroJobs'
 import {
   getMacroEstimate,
@@ -19,6 +19,7 @@ const mergeJobs = (incoming, current) => {
 export const useMacroScans = ({ addToast, enabled = true, pollingEnabled = true }) => {
   const [boundaries, setBoundaries] = useState([])
   const [jobs, setJobs] = useState([])
+  const [hiddenJobIds, setHiddenJobIds] = useState(() => new Set())
   const [selectedBoundaryId, setSelectedBoundaryId] = useState('')
   const [estimate, setEstimate] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -53,6 +54,11 @@ export const useMacroScans = ({ addToast, enabled = true, pollingEnabled = true 
       if (!quiet) setLoading(false)
     }
   }, [])
+
+  const visibleJobs = useMemo(
+    () => jobs.filter((job) => !hiddenJobIds.has(job.job_id)),
+    [hiddenJobIds, jobs],
+  )
 
   useEffect(() => {
     if (!enabled) {
@@ -89,13 +95,13 @@ export const useMacroScans = ({ addToast, enabled = true, pollingEnabled = true 
 
   useEffect(() => {
     if (!enabled || !pollingEnabled) return undefined
-    const hasActiveJob = jobs.some(isActiveMacroJob)
+    const hasActiveJob = visibleJobs.some(isActiveMacroJob)
     const interval = window.setInterval(
       () => loadJobs({ quiet: true }),
       hasActiveJob ? 5000 : 15000,
     )
     return () => window.clearInterval(interval)
-  }, [enabled, pollingEnabled, jobs, loadJobs])
+  }, [enabled, pollingEnabled, visibleJobs, loadJobs])
 
   const launch = useCallback(
     async (confidence) => {
@@ -156,9 +162,22 @@ export const useMacroScans = ({ addToast, enabled = true, pollingEnabled = true 
     [addToast, enabled, loadJobs],
   )
 
+  const hideJob = useCallback(
+    (jobId) => {
+      setHiddenJobIds((current) => {
+        if (current.has(jobId)) return current
+        const next = new Set(current)
+        next.add(jobId)
+        return next
+      })
+      addToast('Macro job hidden from this list. The backend job is unchanged.', 'info')
+    },
+    [addToast],
+  )
+
   return {
     boundaries,
-    jobs,
+    jobs: visibleJobs,
     selectedBoundaryId,
     setSelectedBoundaryId,
     estimate,
@@ -169,6 +188,7 @@ export const useMacroScans = ({ addToast, enabled = true, pollingEnabled = true 
     error,
     launch,
     resume,
+    hideJob,
     refreshJobs: loadJobs,
   }
 }
