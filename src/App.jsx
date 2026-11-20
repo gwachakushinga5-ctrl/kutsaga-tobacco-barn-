@@ -309,10 +309,10 @@ const Dashboard = ({ user, onSignOut }) => {
     dashboard.addToast('Watching new candidates in Waiting approval', 'info')
   }, [dashboard])
 
-  const handleActivateJob = useCallback(
-    (jobId) => {
+  const handleActivateJobs = useCallback(
+    (jobIds) => {
       setLivePollingEnabled(true)
-      dashboard.activateJob(jobId)
+      dashboard.activateJob(jobIds)
     },
     [dashboard],
   )
@@ -330,11 +330,11 @@ const Dashboard = ({ user, onSignOut }) => {
 
   const handleLaunchMacro = useCallback(async () => {
     const result = await macro.launch(confidence)
-    const firstJob = result?.jobs?.[0]
-    if (firstJob) {
+    const jobs = Array.isArray(result?.jobs) ? result.jobs : []
+    if (jobs.length) {
       setLivePollingEnabled(true)
-      dashboard.activateJob(firstJob.job_id)
-      fitMacroBounds(firstJob.bounds)
+      dashboard.activateJob(jobs.map((job) => job.job_id))
+      fitMacroBounds(jobs[0].bounds)
     }
   }, [confidence, dashboard, fitMacroBounds, macro])
 
@@ -350,6 +350,7 @@ const Dashboard = ({ user, onSignOut }) => {
   const seenMacroIds = useRef(null)
   const pollRegistry = dashboard.pollRegistry
   const scanJobId = dashboard.scanJobId
+  const scanJobIds = dashboard.scanJobIds
   const hasActiveMacro = useMemo(() => macro.jobs.some(isActiveMacroJob), [macro.jobs])
 
   useEffect(() => {
@@ -368,14 +369,15 @@ const Dashboard = ({ user, onSignOut }) => {
 
   useEffect(() => {
     if (!livePollingEnabled) return undefined
-    const activeJobId = hasActiveMacro ? scanJobId : null
+    const activeIds = scanJobIds.length ? scanJobIds : scanJobId ? [scanJobId] : []
+    const activeJobIds = hasActiveMacro ? activeIds : []
     const poll = () => {
-      if (!document.hidden) pollRegistry(activeJobId)
+      if (!document.hidden) pollRegistry(activeJobIds)
     }
     poll()
-    const timer = window.setInterval(poll, activeJobId ? 4000 : 8000)
+    const timer = window.setInterval(poll, activeJobIds.length ? 4000 : 8000)
     return () => window.clearInterval(timer)
-  }, [hasActiveMacro, livePollingEnabled, pollRegistry, scanJobId])
+  }, [hasActiveMacro, livePollingEnabled, pollRegistry, scanJobId, scanJobIds])
 
   useEffect(() => {
     if (!taxonomySelection?.autoSubmit || !taxonomySelection.code) return
@@ -501,9 +503,9 @@ const Dashboard = ({ user, onSignOut }) => {
             onWatchGlobal={handleWatchGlobal}
             onToggleLivePolling={handleToggleLivePolling}
             onDeleteWaiting={dashboard.removeWaitingDetections}
-            onHideJob={macro.hideJob}
+            onHideJobs={macro.hideJob}
             onResume={macro.resume}
-            onActivateJob={handleActivateJob}
+            onActivateJobs={handleActivateJobs}
             onFitBounds={fitMacroBounds}
           />
           <ApprovalQueueCard

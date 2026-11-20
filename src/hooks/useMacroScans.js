@@ -163,14 +163,19 @@ export const useMacroScans = ({ addToast, enabled = true, pollingEnabled = true 
   )
 
   const hideJob = useCallback(
-    (jobId) => {
+    (jobIdOrIds) => {
+      const ids = Array.isArray(jobIdOrIds) ? jobIdOrIds : [jobIdOrIds]
       setHiddenJobIds((current) => {
-        if (current.has(jobId)) return current
         const next = new Set(current)
-        next.add(jobId)
+        ids.forEach((id) => next.add(id))
         return next
       })
-      addToast('Macro job hidden from this list. The backend job is unchanged.', 'info')
+      addToast(
+        `${ids.length} macro job${ids.length === 1 ? '' : 's'} hidden from this list. The backend job${
+          ids.length === 1 ? ' is' : 's are'
+        } unchanged.`,
+        'info',
+      )
     },
     [addToast],
   )
