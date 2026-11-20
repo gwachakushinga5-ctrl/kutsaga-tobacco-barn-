@@ -173,6 +173,32 @@ export const verifyCandidate = (complexId, payload) =>
     body: payload,
   })
 
+export const listMacroBoundaries = (signal) =>
+  request('/api/v1/admin/macro-scans/boundaries', { signal })
+
+export const getMacroEstimate = (boundaryId, signal) =>
+  request(`/api/v1/admin/macro-scans/estimate/${encodeURIComponent(boundaryId)}`, {
+    signal,
+  })
+
+export const listMacroScans = (signal) =>
+  request('/api/v1/admin/macro-scans', { signal })
+
+export const launchMacroScan = ({ boundaryId, name, confidenceThreshold }) =>
+  request('/api/v1/admin/macro-scans', {
+    method: 'POST',
+    body: {
+      boundary_id: boundaryId,
+      name: name ?? null,
+      confidence_threshold: confidenceThreshold,
+    },
+  })
+
+export const resumeMacroScan = (jobId) =>
+  request(`/api/v1/admin/macro-scans/${encodeURIComponent(jobId)}/resume`, {
+    method: 'POST',
+  })
+
 const sourceFromCropData = (data) => {
   if (!data) return null
   if (typeof data === 'string') {

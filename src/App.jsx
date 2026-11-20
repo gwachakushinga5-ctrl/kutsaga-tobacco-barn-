@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ApprovalQueueCard } from './components/ApprovalQueueCard'
 import { BasemapSwitcher } from './components/BasemapSwitcher'
 import { DetectionInspector } from './components/DetectionInspector'
 import { LoginScreen } from './components/LoginScreen'
 import { ManualInspectionDialog } from './components/ManualInspectionDialog'
+import { NationalScanCard } from './components/NationalScanCard'
 import { MapLayersPanel } from './components/MapLayersPanel'
 import { MapLegendPanel } from './components/MapLegendPanel'
 import { MapViewport } from './components/MapViewport'
@@ -16,6 +17,7 @@ import { ToastStack } from './components/ToastStack'
 import { ZoomControls } from './components/ZoomControls'
 import { useAuth } from './hooks/useAuth'
 import { useDashboardState } from './hooks/useDashboardState'
+import { useMacroScans } from './hooks/useMacroScans'
 import { MAP_CENTER, MAP_ZOOM, ZONES } from './lib/constants'
 import {
   boundsFromLeaflet,
@@ -62,6 +64,7 @@ const clampAoi = (points, bounds) => {
 
 const Dashboard = ({ user, onSignOut }) => {
   const dashboard = useDashboardState()
+  const macro = useMacroScans({ addToast: dashboard.addToast })
   const mapRef = useRef(null)
   const [layers, setLayers] = useState({
     trb: true,
@@ -80,6 +83,7 @@ const Dashboard = ({ user, onSignOut }) => {
 
   const selectedZone = ZONES.find((zone) => zone.id === zoneId) ?? null
   const running = dashboard.scanStatus === 'RUNNING'
+  const canLaunchMacro = ['admin', 'api'].includes(String(user?.role ?? '').toLowerCase())
 
   useEffect(() => {
     const onKeyDown = (event) => {
@@ -255,6 +259,113 @@ const Dashboard = ({ user, onSignOut }) => {
     return captureTileGrid(center.lat, center.lng, map.getZoom())
   }, [])
 
+  const fitMacroBounds = useCallback((bounds) => {
+    if (!bounds || !mapRef.current) return
+    mapRef.current.fitBounds(
+      [
+        [bounds.south, bounds.west],
+        [bounds.north, bounds.east],
+      ],
+      { padding: [70, 70], maxZoom: 14, animate: true, duration: 0.8 },
+    )
+  }, [])
+
+  const handleQuickConfirm = useCallback(
+    (detectionId) => {
+      dashboard.submitReview(detectionId, 'approved')
+    },
+    [dashboard],
+  )
+
+  const handleQuickReject = useCallback(
+    (detectionId) => {
+      dashboard.selectDetection(detectionId)
+      setTaxonomySelection({
+        detectionId,
+        code: null,
+        token: Date.now(),
+        autoSubmit: true,
+      })
+    },
+    [dashboard],
+  )
+
+  const handleToggleSpatialFilter = useCallback(() => {
+    dashboard.setBboxEnabled((current) => !current)
+  }, [dashboard])
+
+  const handleLaunchMacro = useCallback(async () => {
+    const result = await macro.launch(confidence)
+    const firstJob = result?.jobs?.[0]
+    if (firstJob) {
+      dashboard.activateJob(firstJob.job_id)
+      fitMacroBounds(firstJob.bounds)
+    }
+  }, [confidence, dashboard, fitMacroBounds, macro])
+
+  const completedMacroIds = useMemo(
+    () =>
+      new Set(
+        macro.jobs
+          .filter((job) => String(job.status ?? '').toUpperCase() === 'COMPLETED')
+          .map((job) => job.job_id),
+      ),
+    [macro.jobs],
+  )
+  const seenMacroIds = useRef(null)
+
+  useEffect(() => {
+    if (seenMacroIds.current === null) {
+      seenMacroIds.current = completedMacroIds
+      return
+    }
+    const newlyCompleted = [...completedMacroIds].find(
+      (jobId) => !seenMacroIds.current.has(jobId),
+    )
+    seenMacroIds.current = completedMacroIds
+    if (!newlyCompleted) return
+    dashboard.refresh(newlyCompleted)
+    dashboard.addToast('Macro scan results loaded into the review queue', 'success')
+  }, [completedMacroIds, dashboard])
+
+  useEffect(() => {
+    if (!taxonomySelection?.autoSubmit || !taxonomySelection.code) return
+    dashboard.submitReview(
+      taxonomySelection.detectionId,
+      'rejected',
+      taxonomySelection.code,
+    )
+    setTaxonomySelection(null)
+  }, [taxonomySelection, dashboard])
+
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      const key = event.key.toLowerCase()
+      if (key !== 'c' && key !== 'r') return
+      if (event.metaKey || event.ctrlKey || event.altKey) return
+      const target = event.target
+      const tagName = target?.tagName?.toLowerCase()
+      if (
+        tagName === 'input' ||
+        tagName === 'textarea' ||
+        tagName === 'select' ||
+        target?.isContentEditable
+      ) {
+        return
+      }
+      const detectionId = dashboard.selectedId
+      if (!detectionId) {
+        dashboard.addToast('Select a candidate first to use C / R shortcuts', 'info')
+        return
+      }
+      event.preventDefault()
+      if (key === 'c') handleQuickConfirm(detectionId)
+      else handleQuickReject(detectionId)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [dashboard, handleQuickConfirm, handleQuickReject])
+
   return (
     <div className="app-shell relative w-full overflow-hidden bg-[#020617] text-slate-100">
       <MapViewport
@@ -273,6 +384,7 @@ const Dashboard = ({ user, onSignOut }) => {
         onAoiCancel={handleAoiCancel}
         onDetectionSelect={handleSelectDetection}
         onMapInspect={handleMapInspect}
+        onBoundsChange={dashboard.setMapBounds}
       />
 
       <div className="pointer-events-none absolute right-3 top-3 z-[950] xl:right-[342px]">
@@ -320,6 +432,24 @@ const Dashboard = ({ user, onSignOut }) => {
             telemetry={dashboard.telemetry}
             scanStatus={dashboard.scanStatus}
           />
+          <NationalScanCard
+            boundaries={macro.boundaries}
+            selectedBoundaryId={macro.selectedBoundaryId}
+            onBoundaryChange={macro.setSelectedBoundaryId}
+            estimate={macro.estimate}
+            estimateLoading={macro.estimateLoading}
+            jobs={macro.jobs}
+            loading={macro.loading}
+            launching={macro.launching}
+            resumingId={macro.resumingId}
+            error={macro.error}
+            confidence={confidence}
+            canLaunch={canLaunchMacro}
+            onLaunch={handleLaunchMacro}
+            onResume={macro.resume}
+            onActivateJob={dashboard.activateJob}
+            onFitBounds={fitMacroBounds}
+          />
           <ApprovalQueueCard
             activeTab={dashboard.activeTab}
             onTabChange={dashboard.setActiveTab}
@@ -335,9 +465,13 @@ const Dashboard = ({ user, onSignOut }) => {
             onSelectDetection={handleSelectDetection}
             onRemoveDetection={dashboard.removeDetection}
             onRemoveAll={dashboard.removeAllDetections}
+            onConfirm={handleQuickConfirm}
+            onReject={handleQuickReject}
+            reviewing={dashboard.reviewing}
             onExport={dashboard.exportRejectedToLearning}
             exporting={dashboard.exporting}
             loading={dashboard.loading}
+            live
           />
           <ReviewFiltersCard
             statusFilter={dashboard.statusFilter}
@@ -348,6 +482,8 @@ const Dashboard = ({ user, onSignOut }) => {
             onBandChange={dashboard.setBandFilter}
             minPriority={dashboard.minPriority}
             onMinPriorityChange={dashboard.setMinPriority}
+            bboxEnabled={dashboard.bboxEnabled}
+            onBboxChange={handleToggleSpatialFilter}
             onReset={dashboard.resetFilters}
             onOpenTaxonomy={() => dashboard.setTaxonomyOpen(true)}
           />
@@ -400,7 +536,11 @@ const Dashboard = ({ user, onSignOut }) => {
         onClose={() => dashboard.setTaxonomyOpen(false)}
         selectedCode={taxonomySelection?.code ?? dashboard.selectedDetection?.rejectionReason}
         onSelectReason={(code) => {
-          setTaxonomySelection({ code, token: Date.now() })
+          setTaxonomySelection((current) => ({
+            ...current,
+            code,
+            token: Date.now(),
+          }))
           dashboard.setTaxonomyOpen(false)
         }}
       />

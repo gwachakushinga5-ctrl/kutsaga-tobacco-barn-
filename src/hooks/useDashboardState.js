@@ -100,6 +100,8 @@ export const useDashboardState = () => {
   const [trbFilter, setTrbFilter] = useState('all')
   const [bandFilter, setBandFilter] = useState('all')
   const [minPriority, setMinPriority] = useState(0)
+  const [mapBounds, setMapBounds] = useState(null)
+  const [bboxEnabled, setBboxEnabled] = useState(false)
   const [page, setPage] = useState(1)
   const [selectedId, setSelectedId] = useState(null)
   const [dismissedIds, setDismissedIds] = useState(loadDismissed)
@@ -120,6 +122,14 @@ export const useDashboardState = () => {
   const [exporting, setExporting] = useState(false)
   const [reviewing, setReviewing] = useState(false)
   const toastTimers = useRef(new Map())
+  const initialBoundsRef = useRef(true)
+
+  const bboxFilter = useMemo(() => {
+    if (!bboxEnabled || !mapBounds) return null
+    const values = [mapBounds.south, mapBounds.west, mapBounds.north, mapBounds.east]
+    if (!values.every(Number.isFinite)) return null
+    return `${mapBounds.west},${mapBounds.south},${mapBounds.east},${mapBounds.north}`
+  }, [bboxEnabled, mapBounds])
 
   useEffect(() => {
     const onKeyChange = (event) => {
@@ -246,8 +256,9 @@ export const useDashboardState = () => {
     async (jobId = scanJobId) => {
       setLoading(true)
       try {
+        const spatialParams = bboxFilter ? { bbox: bboxFilter } : {}
         const [globalList, globalCounts, groundTruth] = await Promise.all([
-          loadCandidates({ scope: 'all' }),
+          loadCandidates({ scope: 'all', ...spatialParams }),
           loadCounts({ scope: 'all' }),
           getGroundTruth({ limit: 5000 }),
         ])
@@ -263,7 +274,7 @@ export const useDashboardState = () => {
         const currentJobId = mostRecentJobId(globalList, jobId)
         if (currentJobId) {
           const [currentList, currentCounts] = await Promise.all([
-            loadCandidates({ scan_job_id: currentJobId }),
+            loadCandidates({ scan_job_id: currentJobId, ...spatialParams }),
             loadCounts({ scan_job_id: currentJobId }),
           ])
           setScanDetections(currentList)
@@ -278,13 +289,58 @@ export const useDashboardState = () => {
         setLoading(false)
       }
     },
-    [addToast, loadCandidates, loadCounts, scanJobId],
+    [addToast, bboxFilter, loadCandidates, loadCounts, scanJobId],
   )
 
   useEffect(() => {
     refresh(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    if (initialBoundsRef.current) {
+      initialBoundsRef.current = false
+      return undefined
+    }
+    const timer = window.setTimeout(() => refresh(scanJobId), 500)
+    return () => window.clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bboxFilter])
+
+  const refreshCounts = useCallback(async () => {
+    try {
+      const [globalCounts, currentCounts] = await Promise.all([
+        loadCounts({ scope: 'all' }),
+        scanJobId
+          ? loadCounts({ scan_job_id: scanJobId })
+          : Promise.resolve(INITIAL_COUNTS),
+      ])
+      setCountsByScope((current) => ({
+        ...current,
+        global: globalCounts,
+        current: currentCounts,
+      }))
+    } catch {
+      // Live counter polling is best-effort; the next review or scan reloads it.
+    }
+  }, [loadCounts, scanJobId])
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (!document.hidden) refreshCounts()
+    }, 8000)
+    return () => window.clearInterval(timer)
+  }, [refreshCounts])
+
+  const activateJob = useCallback(
+    (jobId) => {
+      setScanJobId(jobId)
+      setActiveTab('current')
+      setStatusFilter('all')
+      refresh(jobId)
+    },
+    [refresh],
+  )
 
   const runScan = useCallback(
     async ({ label, points, bounds, confidence }) => {
@@ -615,6 +671,10 @@ export const useDashboardState = () => {
     setBandFilter,
     minPriority,
     setMinPriority,
+    mapBounds,
+    setMapBounds,
+    bboxEnabled,
+    setBboxEnabled,
     page: safePage,
     pageCount,
     setPage,
@@ -622,6 +682,8 @@ export const useDashboardState = () => {
     counts,
     loading,
     refresh,
+    refreshCounts,
+    activateJob,
     selectedDetection,
     selectedId,
     selectDetection: setSelectedId,

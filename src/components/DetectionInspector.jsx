@@ -255,10 +255,11 @@ export const DetectionInspector = ({
                     type="button"
                     disabled={reviewing}
                     onClick={() => onReview(detection.id, 'approved')}
+                    title="Confirm barn (C)"
                     className="flex items-center justify-center gap-1.5 rounded-md border border-blue-500/35 bg-blue-500/10 px-2 py-2 text-[9px] font-semibold text-blue-300 transition hover:bg-blue-500/20 disabled:opacity-50"
                   >
                     <Check size={11} />
-                    Approve
+                    Confirm
                   </button>
                   <button
                     type="button"

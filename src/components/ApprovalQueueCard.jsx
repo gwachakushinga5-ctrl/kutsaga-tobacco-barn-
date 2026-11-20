@@ -1,4 +1,5 @@
 import {
+  Check,
   ChevronLeft,
   ChevronRight,
   ClipboardCheck,
@@ -8,6 +9,7 @@ import {
   Radar,
   SearchX,
   Trash2,
+  X,
 } from 'lucide-react'
 import {
   REVIEW_BANDS,
@@ -47,8 +49,12 @@ export const ApprovalQueueCard = ({
   onSelectDetection,
   onRemoveDetection,
   onRemoveAll,
+  onConfirm,
+  onReject,
+  reviewing,
   onExport,
   exporting,
+  live,
 }) => {
   const tabs = [
     { value: 'global', label: 'Global Registry' },
@@ -63,6 +69,20 @@ export const ApprovalQueueCard = ({
         subtitle="Persistent registry. Click a row to inspect its Z18 crop."
         right={
           <div className="flex shrink-0 items-center gap-1.5">
+            <span
+              className={`flex items-center gap-1 rounded-full border px-1.5 py-0.5 font-mono text-[7.5px] uppercase tracking-[0.12em] ${
+                live
+                  ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+                  : 'border-slate-700/70 bg-slate-900/60 text-slate-500'
+              }`}
+            >
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${
+                  live ? 'animate-pulse bg-emerald-300' : 'bg-slate-600'
+                }`}
+              />
+              Live
+            </span>
             <button
               type="button"
               onClick={onRemoveAll}
@@ -194,7 +214,33 @@ export const ApprovalQueueCard = ({
                       </span>
                     </div>
                   </div>
-                  <div className="mt-0.5 flex shrink-0 flex-col items-center gap-1">
+                  <div className="mt-0.5 flex shrink-0 items-start gap-0.5">
+                    <button
+                      type="button"
+                      title="Confirm barn (C)"
+                      aria-label={`Confirm ${detection.id}`}
+                      disabled={reviewing}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        onConfirm(detection.id)
+                      }}
+                      className="grid h-5 w-5 place-items-center rounded border border-transparent text-slate-600 transition hover:border-blue-500/40 hover:bg-blue-500/10 hover:text-blue-300 disabled:cursor-not-allowed disabled:opacity-30"
+                    >
+                      <Check size={11} />
+                    </button>
+                    <button
+                      type="button"
+                      title="Reject barn (R)"
+                      aria-label={`Reject ${detection.id}`}
+                      disabled={reviewing}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        onReject(detection.id)
+                      }}
+                      className="grid h-5 w-5 place-items-center rounded border border-transparent text-slate-600 transition hover:border-red-500/40 hover:bg-red-500/10 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-30"
+                    >
+                      <X size={11} />
+                    </button>
                     <button
                       type="button"
                       title="Remove wrong barn"
@@ -203,13 +249,13 @@ export const ApprovalQueueCard = ({
                         event.stopPropagation()
                         onRemoveDetection(detection.id)
                       }}
-                      className="grid h-5 w-5 place-items-center rounded border border-transparent text-slate-600 transition hover:border-red-500/40 hover:bg-red-500/10 hover:text-red-300"
+                      className="grid h-5 w-5 place-items-center rounded border border-transparent text-slate-600 transition hover:border-slate-600 hover:bg-slate-800/60 hover:text-slate-300"
                     >
                       <Trash2 size={11} />
                     </button>
                     <ChevronRight
                       size={12}
-                      className="text-slate-600 transition group-hover:translate-x-0.5 group-hover:text-cyan-400"
+                      className="mt-1 text-slate-600 transition group-hover:translate-x-0.5 group-hover:text-cyan-400"
                     />
                   </div>
                 </div>

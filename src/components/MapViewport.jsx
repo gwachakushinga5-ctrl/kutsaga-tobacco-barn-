@@ -47,8 +47,13 @@ const trbIcon = L.divIcon({
   html: '<div class="trb-marker"></div>',
 })
 
-const MapBridge = ({ mapRef }) => {
+const MapBridge = ({ mapRef, onBoundsChange }) => {
   const map = useMap()
+  const onBoundsChangeRef = useRef(onBoundsChange)
+
+  useEffect(() => {
+    onBoundsChangeRef.current = onBoundsChange
+  }, [onBoundsChange])
 
   useEffect(() => {
     mapRef.current = map
@@ -56,8 +61,22 @@ const MapBridge = ({ mapRef }) => {
     const observer = new ResizeObserver(() => map.invalidateSize())
     observer.observe(container.parentElement || container)
     const timer = setTimeout(() => map.invalidateSize(), 60)
+
+    const emitBounds = () => {
+      const bounds = map.getBounds()
+      onBoundsChangeRef.current?.({
+        south: bounds.getSouth(),
+        west: bounds.getWest(),
+        north: bounds.getNorth(),
+        east: bounds.getEast(),
+      })
+    }
+    map.on('moveend', emitBounds)
+    emitBounds()
+
     return () => {
       clearTimeout(timer)
+      map.off('moveend', emitBounds)
       observer.disconnect()
       mapRef.current = null
     }
@@ -236,6 +255,7 @@ export const MapViewport = ({
   onAoiCancel,
   onDetectionSelect,
   onMapInspect,
+  onBoundsChange,
 }) => {
   const basemapConfig = BASEMAPS.find((item) => item.id === basemap) ?? BASEMAPS[0]
   const selectedDetection = detections.find((item) => item.id === selectedId)
@@ -259,7 +279,7 @@ export const MapViewport = ({
         zoomDelta={0.5}
         className="z-0 h-full w-full"
       >
-        <MapBridge mapRef={mapRef} />
+        <MapBridge mapRef={mapRef} onBoundsChange={onBoundsChange} />
         <AoiDrawer drawing={drawing} onCreated={onAoiCreated} onCancel={onAoiCancel} />
         <InspectionClicker enabled={inspectMode && !drawing} onInspect={onMapInspect} />
 

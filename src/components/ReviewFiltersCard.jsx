@@ -3,6 +3,7 @@ import { REVIEW_BANDS, STATUS_META, STATUS_ORDER, TRB_STATES } from '../lib/cons
 import { GlassCard } from './ui/GlassCard'
 import { RangeSlider } from './ui/RangeSlider'
 import { SectionHeader } from './ui/SectionHeader'
+import { ToggleRow } from './ui/ToggleRow'
 
 const SelectField = ({ id, label, value, onChange, children }) => (
   <div>
@@ -39,6 +40,8 @@ export const ReviewFiltersCard = ({
   onBandChange,
   minPriority,
   onMinPriorityChange,
+  bboxEnabled,
+  onBboxChange,
   onReset,
   onOpenTaxonomy,
 }) => (
@@ -112,6 +115,15 @@ export const ReviewFiltersCard = ({
         max={1}
         step={0.01}
         onChange={onMinPriorityChange}
+      />
+    </div>
+
+    <div className="mt-2 rounded-lg border border-slate-800/80 bg-slate-950/25 py-1">
+      <ToggleRow
+        label="Spatial prefilter · map view"
+        checked={bboxEnabled}
+        onChange={onBboxChange}
+        dotClass="bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.8)]"
       />
     </div>
 
