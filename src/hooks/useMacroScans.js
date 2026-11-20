@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { isActiveMacroJob } from '../lib/macroJobs'
 import {
   getMacroEstimate,
   launchMacroScan,
@@ -6,8 +7,6 @@ import {
   listMacroScans,
   resumeMacroScan,
 } from '../services/api'
-
-const ACTIVE_STATUSES = new Set(['PENDING', 'RUNNING', 'QUEUED', 'STARTING'])
 
 const mergeJobs = (incoming, current) => {
   const byId = new Map(current.map((job) => [job.job_id, job]))
@@ -90,9 +89,7 @@ export const useMacroScans = ({ addToast, enabled = true }) => {
 
   useEffect(() => {
     if (!enabled) return undefined
-    const hasActiveJob = jobs.some((job) =>
-      ACTIVE_STATUSES.has(String(job.status ?? '').toUpperCase()),
-    )
+    const hasActiveJob = jobs.some(isActiveMacroJob)
     const interval = window.setInterval(
       () => loadJobs({ quiet: true }),
       hasActiveJob ? 5000 : 15000,

@@ -10,14 +10,13 @@ import {
   TriangleAlert,
 } from 'lucide-react'
 import { formatDateTime } from '../lib/constants'
+import { isActiveMacroJob, isResumableMacroJob } from '../lib/macroJobs'
 import { GlassCard } from './ui/GlassCard'
 import { SectionHeader } from './ui/SectionHeader'
 
-const ACTIVE_STATUSES = new Set(['PENDING', 'RUNNING', 'QUEUED', 'STARTING'])
-
-const statusClasses = (status) => {
-  const value = String(status ?? '').toUpperCase()
-  if (ACTIVE_STATUSES.has(value)) return 'border-cyan-500/35 bg-cyan-500/10 text-cyan-300'
+const statusClasses = (job) => {
+  const value = String(job?.status ?? '').toUpperCase()
+  if (isActiveMacroJob(job)) return 'border-cyan-500/35 bg-cyan-500/10 text-cyan-300'
   if (value === 'COMPLETED') return 'border-emerald-500/35 bg-emerald-500/10 text-emerald-300'
   if (value === 'FAILED' || value === 'CANCELLED') {
     return 'border-red-500/35 bg-red-500/10 text-red-300'
@@ -30,11 +29,6 @@ const progressOf = (job) => {
   const done = Number(job?.processed_tiles ?? 0)
   if (!total) return 0
   return Math.min(100, Math.round((done / total) * 100))
-}
-
-const isResumable = (job) => {
-  const status = String(job?.status ?? '').toUpperCase()
-  return !ACTIVE_STATUSES.has(status) && status !== 'COMPLETED'
 }
 
 const EstimateItem = ({ label, value, tone = 'text-slate-200' }) => (
@@ -58,14 +52,14 @@ export const NationalScanCard = ({
   confidence,
   canLaunch,
   restricted,
+  role,
   onLaunch,
+  onWatchGlobal,
   onResume,
   onActivateJob,
   onFitBounds,
 }) => {
-  const activeCount = jobs.filter((job) =>
-    ACTIVE_STATUSES.has(String(job.status ?? '').toUpperCase()),
-  ).length
+  const activeCount = jobs.filter(isActiveMacroJob).length
 
   if (restricted) {
     return (
@@ -73,11 +67,11 @@ export const NationalScanCard = ({
         <SectionHeader
           icon={Globe}
           title="National scan"
-          subtitle="Unattended Azure macro scan. Results flow into the review queue."
+          subtitle={`Unattended Azure macro scan · role: ${role ?? 'unknown'}`}
           right={
             <span className="flex items-center gap-1 rounded-full border border-slate-700/70 bg-slate-900/60 px-1.5 py-0.5 font-mono text-[7.5px] uppercase tracking-[0.12em] text-slate-500">
               <LockKeyhole size={8} />
-              Admin
+              Admin only
             </span>
           }
         />
@@ -89,6 +83,14 @@ export const NationalScanCard = ({
             it refreshes automatically.
           </span>
         </div>
+        <button
+          type="button"
+          onClick={onWatchGlobal}
+          className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/[0.07] px-3 py-2 text-[9px] font-semibold uppercase tracking-[0.11em] text-cyan-300 transition hover:bg-cyan-500/15"
+        >
+          <Activity size={10} />
+          Watch live registry
+        </button>
       </GlassCard>
     )
   }
@@ -98,7 +100,7 @@ export const NationalScanCard = ({
       <SectionHeader
         icon={Globe}
         title="National scan"
-        subtitle="Unattended Azure macro scan. Results flow into the review queue."
+        subtitle={`Unattended Azure macro scan · role: ${role ?? 'admin'}`}
         right={
           <span
             className={`flex items-center gap-1 rounded-full border px-1.5 py-0.5 font-mono text-[7.5px] uppercase tracking-[0.12em] ${
@@ -116,6 +118,15 @@ export const NationalScanCard = ({
           </span>
         }
       />
+
+      <button
+        type="button"
+        onClick={onWatchGlobal}
+        className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/[0.07] px-3 py-2 text-[9px] font-semibold uppercase tracking-[0.11em] text-cyan-300 transition hover:bg-cyan-500/15"
+      >
+        <Activity size={10} />
+        Watch live registry
+      </button>
 
       <div className="mt-3">
         <label
@@ -215,7 +226,7 @@ export const NationalScanCard = ({
           {jobs.length ? (
             jobs.slice(0, 5).map((job) => {
               const percent = progressOf(job)
-              const busy = ACTIVE_STATUSES.has(String(job.status ?? '').toUpperCase())
+              const busy = isActiveMacroJob(job)
               return (
                 <div
                   key={job.job_id}
@@ -232,7 +243,7 @@ export const NationalScanCard = ({
                       </p>
                     </div>
                     <span
-                      className={`shrink-0 rounded border px-1 py-0.5 font-mono text-[7px] uppercase tracking-[0.1em] ${statusClasses(job.status)}`}
+                      className={`shrink-0 rounded border px-1 py-0.5 font-mono text-[7px] uppercase tracking-[0.1em] ${statusClasses(job)}`}
                     >
                       {job.progress_status || job.status}
                     </span>
@@ -264,7 +275,7 @@ export const NationalScanCard = ({
                       {busy ? 'Watch live' : 'Review'}
                       <ChevronRight size={8} />
                     </button>
-                    {isResumable(job) ? (
+                    {isResumableMacroJob(job) ? (
                       <button
                         type="button"
                         disabled={Boolean(resumingId)}

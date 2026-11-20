@@ -19,6 +19,7 @@ import { useAuth } from './hooks/useAuth'
 import { useDashboardState } from './hooks/useDashboardState'
 import { useMacroScans } from './hooks/useMacroScans'
 import { MAP_CENTER, MAP_ZOOM, ZONES } from './lib/constants'
+import { isActiveMacroJob } from './lib/macroJobs'
 import {
   boundsFromLeaflet,
   boundsOfPoints,
@@ -64,7 +65,8 @@ const clampAoi = (points, bounds) => {
 
 const Dashboard = ({ user, onSignOut }) => {
   const dashboard = useDashboardState()
-  const canLaunchMacro = ['admin', 'api'].includes(String(user?.role ?? '').toLowerCase())
+  const userRole = String(user?.role ?? 'unknown')
+  const canLaunchMacro = ['admin', 'api'].includes(userRole.toLowerCase())
   const macro = useMacroScans({
     addToast: dashboard.addToast,
     enabled: canLaunchMacro,
@@ -297,6 +299,13 @@ const Dashboard = ({ user, onSignOut }) => {
     dashboard.setBboxEnabled((current) => !current)
   }, [dashboard])
 
+  const handleWatchGlobal = useCallback(() => {
+    dashboard.setActiveTab('global')
+    dashboard.setStatusFilter('all')
+    dashboard.setBboxEnabled(false)
+    dashboard.addToast('Watching the global registry live', 'info')
+  }, [dashboard])
+
   const handleLaunchMacro = useCallback(async () => {
     const result = await macro.launch(confidence)
     const firstJob = result?.jobs?.[0]
@@ -318,15 +327,7 @@ const Dashboard = ({ user, onSignOut }) => {
   const seenMacroIds = useRef(null)
   const pollRegistry = dashboard.pollRegistry
   const scanJobId = dashboard.scanJobId
-  const hasActiveMacro = useMemo(
-    () =>
-      macro.jobs.some((job) =>
-        ['PENDING', 'RUNNING', 'QUEUED', 'STARTING'].includes(
-          String(job.status ?? '').toUpperCase(),
-        ),
-      ),
-    [macro.jobs],
-  )
+  const hasActiveMacro = useMemo(() => macro.jobs.some(isActiveMacroJob), [macro.jobs])
 
   useEffect(() => {
     if (seenMacroIds.current === null) {
@@ -470,7 +471,9 @@ const Dashboard = ({ user, onSignOut }) => {
             confidence={confidence}
             canLaunch={canLaunchMacro}
             restricted={!canLaunchMacro}
+            role={userRole}
             onLaunch={handleLaunchMacro}
+            onWatchGlobal={handleWatchGlobal}
             onResume={macro.resume}
             onActivateJob={dashboard.activateJob}
             onFitBounds={fitMacroBounds}
