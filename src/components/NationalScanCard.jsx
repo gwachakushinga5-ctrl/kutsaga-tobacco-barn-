@@ -85,7 +85,8 @@ export const NationalScanCard = ({
           <LockKeyhole size={11} className="mt-0.5 shrink-0 text-amber-400/80" />
           <span>
             National scan controls require an admin role. Ask an administrator to launch the
-            countrywide scan; its candidates will appear in the global review queue.
+            countrywide scan. You can still watch detections arrive in the Global Registry tab —
+            it refreshes automatically.
           </span>
         </div>
       </GlassCard>

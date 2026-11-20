@@ -343,12 +343,12 @@ const Dashboard = ({ user, onSignOut }) => {
   }, [completedMacroIds, dashboard])
 
   useEffect(() => {
-    if (!hasActiveMacro || !scanJobId) return undefined
+    const activeJobId = hasActiveMacro ? scanJobId : null
     const poll = () => {
-      if (!document.hidden) pollRegistry(scanJobId)
+      if (!document.hidden) pollRegistry(activeJobId)
     }
     poll()
-    const timer = window.setInterval(poll, 4000)
+    const timer = window.setInterval(poll, activeJobId ? 4000 : 8000)
     return () => window.clearInterval(timer)
   }, [hasActiveMacro, pollRegistry, scanJobId])
 

@@ -349,7 +349,7 @@ export const useDashboardState = () => {
         setCountsByScope((current) => ({
           ...current,
           global: globalCounts,
-          current: currentCounts,
+          ...(jobId ? { current: currentCounts } : {}),
         }))
         if (currentList) {
           setScanDetections((current) => [
