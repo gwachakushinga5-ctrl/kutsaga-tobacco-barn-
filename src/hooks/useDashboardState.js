@@ -368,7 +368,7 @@ export const useDashboardState = () => {
     (jobId) => {
       setScanJobId(jobId)
       setActiveTab('current')
-      setStatusFilter('all')
+      setStatusFilter('waiting')
       refresh(jobId)
     },
     [refresh],

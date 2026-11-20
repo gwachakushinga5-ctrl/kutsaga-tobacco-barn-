@@ -89,7 +89,7 @@ export const NationalScanCard = ({
           className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/[0.07] px-3 py-2 text-[9px] font-semibold uppercase tracking-[0.11em] text-cyan-300 transition hover:bg-cyan-500/15"
         >
           <Activity size={10} />
-          Watch live registry
+          Watch waiting candidates
         </button>
       </GlassCard>
     )
@@ -125,7 +125,7 @@ export const NationalScanCard = ({
         className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/[0.07] px-3 py-2 text-[9px] font-semibold uppercase tracking-[0.11em] text-cyan-300 transition hover:bg-cyan-500/15"
       >
         <Activity size={10} />
-        Watch live registry
+        Watch waiting candidates
       </button>
 
       <div className="mt-3">
@@ -272,7 +272,7 @@ export const NationalScanCard = ({
                       className="flex items-center gap-1 rounded border border-cyan-500/25 bg-cyan-500/[0.06] px-1.5 py-0.5 text-[7.5px] font-semibold uppercase tracking-[0.1em] text-cyan-300 transition hover:bg-cyan-500/15"
                     >
                       <MapPin size={8} />
-                      {busy ? 'Watch live' : 'Review'}
+                      {busy ? 'Watch waiting' : 'Review'}
                       <ChevronRight size={8} />
                     </button>
                     {isResumableMacroJob(job) ? (

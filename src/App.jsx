@@ -301,9 +301,9 @@ const Dashboard = ({ user, onSignOut }) => {
 
   const handleWatchGlobal = useCallback(() => {
     dashboard.setActiveTab('global')
-    dashboard.setStatusFilter('all')
+    dashboard.setStatusFilter('waiting')
     dashboard.setBboxEnabled(false)
-    dashboard.addToast('Watching the global registry live', 'info')
+    dashboard.addToast('Watching new candidates in Waiting approval', 'info')
   }, [dashboard])
 
   const handleLaunchMacro = useCallback(async () => {

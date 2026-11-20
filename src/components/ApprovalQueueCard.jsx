@@ -271,7 +271,9 @@ export const ApprovalQueueCard = ({
             )}
             <p className="text-[10px] text-slate-400">
               {activeTab === 'current'
-                ? 'No current scan results yet. Run a zone scan or inspect the imagery manually.'
+                ? live
+                  ? 'Scanning now. New candidates will appear here as soon as they are committed.'
+                  : 'No current scan results yet. Run a zone scan or inspect the imagery manually.'
                 : 'No candidates to show. The registry is empty or the active filters exclude everything.'}
             </p>
           </div>
