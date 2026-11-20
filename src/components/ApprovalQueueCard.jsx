@@ -91,11 +91,11 @@ export const ApprovalQueueCard = ({
               type="button"
               onClick={onRemoveAll}
               disabled={!counts.total}
+              aria-label="Remove all mapped barns from the approval queue"
               title="Remove all mapped barns from the approval queue"
-              className="flex items-center gap-1 rounded-md border border-red-500/25 bg-red-500/[0.07] px-1.5 py-1 text-[7.5px] font-semibold uppercase tracking-[0.1em] text-red-300 transition hover:border-red-500/45 hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-30"
+              className="grid h-6 w-6 place-items-center rounded-md border border-red-500/25 bg-red-500/[0.07] text-red-300 transition hover:border-red-500/45 hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-30"
             >
-              <Trash2 size={9} />
-              Remove all
+              <Trash2 size={10} />
             </button>
             <span className="grid h-6 min-w-6 place-items-center rounded-full border border-amber-500/40 bg-amber-500/15 px-1.5 font-mono text-[10px] font-bold text-amber-300 shadow-[0_0_16px_-4px_rgba(245,158,11,0.7)]">
               {counts.waiting}
