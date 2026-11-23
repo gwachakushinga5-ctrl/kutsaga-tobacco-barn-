@@ -148,6 +148,18 @@ export const useMacroScans = ({ addToast, enabled = true, pollingEnabled = true 
         return null
       }
 
+      const jobCount = estimate
+        ? estimate.requires_subsectors
+          ? estimate.cells?.length ?? 0
+          : estimate.launchable
+            ? 1
+            : 0
+        : null
+      if (jobCount === 0) {
+        addToast('This boundary has no launchable cells — choose another boundary', 'error')
+        return null
+      }
+
       setLaunching(true)
       try {
         const result = await launchMacroScan({
@@ -179,7 +191,7 @@ export const useMacroScans = ({ addToast, enabled = true, pollingEnabled = true 
         setLaunching(false)
       }
     },
-    [addToast, enabled, estimate?.name, jobBoundaryIds, selectedBoundaryId],
+    [addToast, enabled, estimate, jobBoundaryIds, selectedBoundaryId],
   )
 
   const resume = useCallback(

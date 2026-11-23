@@ -70,6 +70,14 @@ export const NationalScanCard = ({
 }) => {
   const provinceGroups = useMemo(() => groupMacroJobsByProvince(jobs), [jobs])
   const activeCount = provinceGroups.filter((group) => group.active).length
+  const estimatedJobs = estimate
+    ? estimate.requires_subsectors
+      ? estimate.cells?.length ?? 0
+      : estimate.launchable
+        ? 1
+        : 0
+    : null
+  const boundaryBlocked = estimatedJobs === 0
 
   if (restricted) {
     return (
@@ -258,17 +266,17 @@ export const NationalScanCard = ({
             label="Est. days"
             value={Number(estimate.estimated_days ?? 0).toFixed(1)}
           />
-          <EstimateItem
-            label="Jobs"
-            value={
-              estimate.requires_subsectors
-                ? estimate.cells?.length ?? 0
-                : estimate.launchable
-                  ? 1
-                  : 0
-            }
-            tone="text-amber-300"
-          />
+          <EstimateItem label="Jobs" value={estimatedJobs} tone="text-amber-300" />
+        </div>
+      ) : null}
+
+      {boundaryBlocked ? (
+        <div className="mt-2 flex items-start gap-1.5 rounded-md border border-amber-500/25 bg-amber-500/[0.06] px-2 py-1.5 text-[9px] leading-relaxed text-amber-200/90">
+          <TriangleAlert size={10} className="mt-0.5 shrink-0 text-amber-400/80" />
+          <span>
+            This boundary has no launchable cells. Azure cannot create a scan job for it — choose
+            another boundary.
+          </span>
         </div>
       ) : null}
 
@@ -281,16 +289,31 @@ export const NationalScanCard = ({
 
       <button
         type="button"
-        disabled={!selectedBoundaryId || launching || !canLaunch}
+        disabled={!selectedBoundaryId || launching || !canLaunch || boundaryBlocked}
         onClick={onLaunch}
-        title={canLaunch ? 'Launch unattended macro scan' : 'Admin role required'}
+        title={
+          boundaryBlocked
+            ? 'This boundary has no launchable cells'
+            : canLaunch
+              ? 'Launch unattended macro scan'
+              : 'Admin role required'
+        }
         className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-lg border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.11em] text-emerald-300 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-40"
       >
         {launching ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
-        {launching ? 'Queueing…' : 'Launch unattended scan'}
+        {launching
+          ? 'Queueing…'
+          : boundaryBlocked
+            ? 'No launchable cells'
+            : 'Launch unattended scan'}
       </button>
       <p className="mt-1 text-center font-mono text-[7.5px] text-slate-600">
-        threshold {Math.round(confidence * 100)}% · {canLaunch ? 'admin controls' : 'admin role required'}
+        threshold {Math.round(confidence * 100)}% ·{' '}
+        {boundaryBlocked
+          ? 'boundary not launchable'
+          : canLaunch
+            ? 'admin controls'
+            : 'admin role required'}
       </p>
 
       <div className="mt-3 border-t border-slate-800/80 pt-2.5">
