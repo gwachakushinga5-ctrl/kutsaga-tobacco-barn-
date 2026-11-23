@@ -313,19 +313,27 @@ export const useDashboardState = ({ livePollingEnabled = true } = {}) => {
       setLoading(true)
       try {
         const spatialParams = bboxFilter ? { bbox: bboxFilter } : {}
-        const [globalList, globalCounts, groundTruth] = await Promise.all([
+        const [candidateResult, countsResult, groundTruthResult] = await Promise.allSettled([
           loadCandidates({ scope: 'all', ...spatialParams }),
           loadCounts({ scope: 'all' }),
           getGroundTruth({ limit: 5000 }),
         ])
 
+        if (candidateResult.status === 'rejected') throw candidateResult.reason
+        const globalList = candidateResult.value
+
         setDetections(globalList)
-        setCountsByScope((current) => ({ ...current, global: globalCounts }))
-        setTrbRegistry(
-          (groundTruth?.features ?? [])
-            .filter(hasPointCoordinates)
-            .map(groundTruthToTrb),
-        )
+        if (countsResult.status === 'fulfilled') {
+          setCountsByScope((current) => ({ ...current, global: countsResult.value }))
+        }
+        if (groundTruthResult.status === 'fulfilled') {
+          const groundTruth = groundTruthResult.value
+          setTrbRegistry(
+            (groundTruth?.features ?? [])
+              .filter(hasPointCoordinates)
+              .map(groundTruthToTrb),
+          )
+        }
 
         let ids = jobIdList(jobIds, scanJobIds)
         if (!ids.length) {
@@ -413,7 +421,7 @@ export const useDashboardState = ({ livePollingEnabled = true } = {}) => {
         const spatialParams = bboxFilter ? { bbox: bboxFilter } : {}
         const [globalList, globalCounts, countResults] = await Promise.all([
           loadCandidates({ scope: 'all', ...spatialParams }),
-          loadCounts({ scope: 'all' }),
+          loadCounts({ scope: 'all' }).catch(() => null),
           settledMapWithConcurrency(ids, JOB_REQUEST_CONCURRENCY, (id) =>
             loadCounts({ scan_job_id: id }),
           ),
@@ -428,7 +436,7 @@ export const useDashboardState = ({ livePollingEnabled = true } = {}) => {
         setDetections(globalList)
         setCountsByScope((current) => ({
           ...current,
-          global: globalCounts,
+          ...(globalCounts ? { global: globalCounts } : {}),
           ...(ids.length ? { current: currentCounts } : {}),
         }))
         if (ids.length) {

@@ -118,7 +118,10 @@ const request = async (path, { method = 'GET', body, headers = {}, signal } = {}
 
   if (!response.ok) {
     const detail = await extractDetail(response)
-    throw new ApiError(detail || `Request failed (${response.status})`, response.status)
+    throw new ApiError(
+      detail || `Request failed (${response.status}) · ${method} ${path}`,
+      response.status,
+    )
   }
 
   if (response.status === 204) return null
