@@ -12,7 +12,6 @@ import { formatArea } from '../lib/geo'
 import { GlassCard } from './ui/GlassCard'
 import { RangeSlider } from './ui/RangeSlider'
 import { SectionHeader } from './ui/SectionHeader'
-import { ToggleRow } from './ui/ToggleRow'
 
 export const ScanSectorCard = ({
   zoneId,
@@ -26,8 +25,6 @@ export const ScanSectorCard = ({
   onClear,
   running,
   aoi,
-  geminiLocate,
-  onGeminiLocateChange,
   geminiStatus,
 }) => {
   const selectedZone = ZONES.find((zone) => zone.id === zoneId)
@@ -139,19 +136,20 @@ export const ScanSectorCard = ({
         />
       </div>
 
-      <div className="mt-2.5 rounded-lg border border-emerald-500/15 bg-emerald-400/[0.035] px-1.5 py-1">
-        <ToggleRow
-          label="Gemini + model together"
-          checked={Boolean(geminiLocate)}
-          onChange={onGeminiLocateChange}
-          dotClass="bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.8)]"
-        />
+      <div className="mt-2.5 flex items-center justify-between rounded-lg border border-emerald-500/15 bg-emerald-400/[0.035] px-1.5 py-1">
+        <span className="text-[9.5px] font-medium text-emerald-200/90">
+          Gemini + model together
+        </span>
+        <span className="flex items-center gap-1 font-mono text-[8px] uppercase tracking-[0.1em] text-emerald-400">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
+          Always on
+        </span>
       </div>
       <p className={`mt-1.5 font-mono text-[8.5px] leading-relaxed ${statusTone}`}>
         {geminiStatus || 'Gemini: not checked yet'}
       </p>
       <p className="mt-0.5 text-[8px] leading-relaxed text-slate-600">
-        On: model detections and Gemini-confirmed barns both enter the queue. Off: model detector only.
+        Model detections and Gemini-confirmed barns both enter the queue automatically.
       </p>
 
       <div className="mt-4 flex gap-2">

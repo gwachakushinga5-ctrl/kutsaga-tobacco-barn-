@@ -475,8 +475,6 @@ const Dashboard = ({ user, onSignOut }) => {
             onClear={handleClearSector}
             running={running}
             aoi={aoi}
-            geminiLocate={dashboard.geminiLocate}
-            onGeminiLocateChange={dashboard.toggleGeminiLocate}
             geminiStatus={dashboard.geminiStatus}
           />
           <ScanTelemetryCard
