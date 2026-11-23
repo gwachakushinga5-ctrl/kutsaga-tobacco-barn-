@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import {
   Activity,
   ChevronRight,
@@ -78,20 +78,6 @@ export const NationalScanCard = ({
         : 0
     : null
   const boundaryBlocked = estimatedJobs === 0
-  const selectedBoundary = useMemo(
-    () => boundaries.find((item) => item.boundary_id === selectedBoundaryId) ?? null,
-    [boundaries, selectedBoundaryId],
-  )
-  const [confirmOpen, setConfirmOpen] = useState(false)
-
-  const handleLaunchClick = () => {
-    if (canLaunch && !boundaryBlocked) setConfirmOpen(true)
-  }
-
-  const handleConfirm = () => {
-    setConfirmOpen(false)
-    onLaunch()
-  }
 
   if (restricted) {
     return (
@@ -304,7 +290,7 @@ export const NationalScanCard = ({
       <button
         type="button"
         disabled={!selectedBoundaryId || launching || !canLaunch || boundaryBlocked}
-        onClick={handleLaunchClick}
+        onClick={onLaunch}
         title={
           boundaryBlocked
             ? 'This boundary has no launchable cells'
@@ -326,39 +312,9 @@ export const NationalScanCard = ({
         {boundaryBlocked
           ? 'boundary not launchable'
           : canLaunch
-            ? 'manual launch only'
+            ? 'admin controls'
             : 'admin role required'}
       </p>
-
-      {confirmOpen ? (
-        <div className="mt-2 rounded-lg border border-amber-500/35 bg-amber-500/[0.07] px-2.5 py-2">
-          <p className="text-[9.5px] leading-relaxed text-amber-100/90">
-            Start an unattended Azure macro scan for{' '}
-            <span className="font-semibold">
-              {selectedBoundary?.name ?? selectedBoundaryId}
-            </span>
-            {estimatedJobs != null ? ` · ${estimatedJobs} job${estimatedJobs === 1 ? '' : 's'}` : ''}
-            ? This only queues the scan — nothing launches automatically.
-          </p>
-          <div className="mt-2 flex gap-1.5">
-            <button
-              type="button"
-              onClick={handleConfirm}
-              className="flex flex-1 items-center justify-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/15 px-2 py-1.5 text-[9px] font-semibold uppercase tracking-[0.1em] text-emerald-200 transition hover:bg-emerald-500/25"
-            >
-              <Play size={10} />
-              Confirm launch
-            </button>
-            <button
-              type="button"
-              onClick={() => setConfirmOpen(false)}
-              className="flex-1 rounded-md border border-slate-700/70 bg-slate-900/60 px-2 py-1.5 text-[9px] font-semibold uppercase tracking-[0.1em] text-slate-400 transition hover:text-slate-200"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      ) : null}
 
       <div className="mt-3 border-t border-slate-800/80 pt-2.5">
         <div className="flex items-center justify-between">
