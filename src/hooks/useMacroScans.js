@@ -48,7 +48,6 @@ export const useMacroScans = ({ addToast, enabled = true, pollingEnabled = true 
   const [launching, setLaunching] = useState(false)
   const [resumingId, setResumingId] = useState('')
   const [error, setError] = useState('')
-  const [backendDown, setBackendDown] = useState(false)
 
   const loadBoundaries = useCallback(async () => {
     try {
@@ -168,7 +167,6 @@ export const useMacroScans = ({ addToast, enabled = true, pollingEnabled = true 
           name: estimate?.name ? `MACRO: ${estimate.name}` : null,
           confidenceThreshold: confidence,
         })
-        setBackendDown(false)
         const launchedJobs = Array.isArray(result?.jobs) ? result.jobs : []
         setJobs((current) => mergeJobs(launchedJobs, current))
         if (launchedJobs.length) {
@@ -187,16 +185,7 @@ export const useMacroScans = ({ addToast, enabled = true, pollingEnabled = true 
         )
         return result
       } catch (launchError) {
-        if (launchError?.status >= 500) {
-          setBackendDown(true)
-          addToast(
-            'Azure backend unavailable — the scan could not be queued. Contact the administrator.',
-            'error',
-          )
-        } else {
-          setBackendDown(false)
-          addToast(launchError.message || 'Unable to launch the macro scan', 'error')
-        }
+        addToast(launchError.message || 'Unable to launch the macro scan', 'error')
         return null
       } finally {
         setLaunching(false)
@@ -227,12 +216,6 @@ export const useMacroScans = ({ addToast, enabled = true, pollingEnabled = true 
     [addToast, enabled, loadJobs],
   )
 
-  const retryBackend = useCallback(async () => {
-    setBackendDown(false)
-    await loadJobs({ quiet: true })
-    await loadBoundaries()
-  }, [loadBoundaries, loadJobs])
-
   const hideJob = useCallback(
     (jobIdOrIds) => {
       const ids = Array.isArray(jobIdOrIds) ? jobIdOrIds : [jobIdOrIds]
@@ -262,8 +245,6 @@ export const useMacroScans = ({ addToast, enabled = true, pollingEnabled = true 
     launching,
     resumingId,
     error,
-    backendDown,
-    retryBackend,
     launch,
     resume,
     hideJob,

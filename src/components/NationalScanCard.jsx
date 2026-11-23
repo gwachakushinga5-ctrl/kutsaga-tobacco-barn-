@@ -54,8 +54,6 @@ export const NationalScanCard = ({
   launching,
   resumingId,
   error,
-  backendDown,
-  onRetryBackend,
   confidence,
   canLaunch,
   restricted,
@@ -87,7 +85,7 @@ export const NationalScanCard = ({
   const [confirmOpen, setConfirmOpen] = useState(false)
 
   const handleLaunchClick = () => {
-    if (canLaunch && !boundaryBlocked && !backendDown) setConfirmOpen(true)
+    if (canLaunch && !boundaryBlocked) setConfirmOpen(true)
   }
 
   const handleConfirm = () => {
@@ -303,49 +301,25 @@ export const NationalScanCard = ({
         </div>
       ) : null}
 
-      {backendDown ? (
-        <div className="mt-2 rounded-lg border border-red-500/35 bg-red-500/[0.08] px-2.5 py-2">
-          <p className="flex items-start gap-1.5 text-[9.5px] leading-relaxed text-red-200/90">
-            <TriangleAlert size={11} className="mt-0.5 shrink-0 text-red-400" />
-            <span>
-              <span className="font-semibold">Azure backend unavailable.</span> The scan could not
-              be queued. Contact the administrator to check the Azure app and clear stuck jobs.
-            </span>
-          </p>
-          <button
-            type="button"
-            onClick={onRetryBackend}
-            className="mt-1.5 flex items-center gap-1 rounded-md border border-slate-700/70 bg-slate-900/60 px-2 py-1 font-mono text-[8px] uppercase tracking-[0.1em] text-slate-400 transition hover:text-slate-200"
-          >
-            <RotateCw size={9} />
-            Retry connection
-          </button>
-        </div>
-      ) : null}
-
       <button
         type="button"
-        disabled={!selectedBoundaryId || launching || !canLaunch || boundaryBlocked || backendDown}
+        disabled={!selectedBoundaryId || launching || !canLaunch || boundaryBlocked}
         onClick={handleLaunchClick}
         title={
-          backendDown
-            ? 'Azure backend unavailable'
-            : boundaryBlocked
-              ? 'This boundary has no launchable cells'
-              : canLaunch
-                ? 'Launch unattended macro scan'
-                : 'Admin role required'
+          boundaryBlocked
+            ? 'This boundary has no launchable cells'
+            : canLaunch
+              ? 'Launch unattended macro scan'
+              : 'Admin role required'
         }
         className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-lg border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.11em] text-emerald-300 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-40"
       >
         {launching ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
         {launching
           ? 'Queueing…'
-          : backendDown
-            ? 'Backend unavailable'
-            : boundaryBlocked
-              ? 'No launchable cells'
-              : 'Launch unattended scan'}
+          : boundaryBlocked
+            ? 'No launchable cells'
+            : 'Launch unattended scan'}
       </button>
       <p className="mt-1 text-center font-mono text-[7.5px] text-slate-600">
         threshold {Math.round(confidence * 100)}% ·{' '}
