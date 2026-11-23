@@ -393,7 +393,11 @@ export const NationalScanCard = ({
             })
           ) : (
             <div className="rounded-lg border border-dashed border-slate-800 bg-slate-950/25 px-3 py-3 text-center text-[9px] text-slate-500">
-              {loading ? 'Loading macro jobs…' : 'No macro scans launched yet.'}
+              {loading
+                ? 'Loading macro jobs…'
+                : selectedBoundaryId
+                  ? 'No macro scans for this boundary yet.'
+                  : 'Select a boundary to see its macro jobs.'}
             </div>
           )}
         </div>

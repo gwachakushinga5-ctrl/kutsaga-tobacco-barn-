@@ -41,6 +41,24 @@ const combinedBounds = (jobs) => {
   }
 }
 
+export const macroJobMatchesBoundary = (job, boundary, selectedBoundaryId) => {
+  if (!selectedBoundaryId) return false
+  if (job?.boundary_id) return job.boundary_id === selectedBoundaryId
+
+  const boundaryName = String(boundary?.name ?? '').trim().toLowerCase()
+  if (!boundaryName) return false
+
+  const jobName = String(job?.name ?? '').toLowerCase()
+  const province = provinceKeyOf(job).toLowerCase()
+
+  return (
+    jobName.includes(boundaryName) ||
+    province === boundaryName ||
+    province.includes(boundaryName) ||
+    boundaryName.includes(province)
+  )
+}
+
 export const groupMacroJobsByProvince = (jobs) => {
   const groups = new Map()
   const list = Array.isArray(jobs) ? jobs : []
