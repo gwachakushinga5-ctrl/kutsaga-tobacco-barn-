@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import {
   Activity,
   ChevronRight,
@@ -10,6 +11,7 @@ import {
   TriangleAlert,
 } from 'lucide-react'
 import { formatDateTime } from '../lib/constants'
+import { groupMacroJobsByProvince } from '../lib/macroJobs'
 import { GlassCard } from './ui/GlassCard'
 import { SectionHeader } from './ui/SectionHeader'
 
@@ -23,18 +25,6 @@ const statusClasses = (status) => {
     return 'border-red-500/35 bg-red-500/10 text-red-300'
   }
   return 'border-slate-700/70 bg-slate-900/60 text-slate-400'
-}
-
-const progressOf = (job) => {
-  const total = Number(job?.total_tiles ?? 0)
-  const done = Number(job?.processed_tiles ?? 0)
-  if (!total) return 0
-  return Math.min(100, Math.round((done / total) * 100))
-}
-
-const isResumable = (job) => {
-  const status = String(job?.status ?? '').toUpperCase()
-  return !ACTIVE_STATUSES.has(status) && status !== 'COMPLETED'
 }
 
 const EstimateItem = ({ label, value, tone = 'text-slate-200' }) => (
@@ -63,9 +53,8 @@ export const NationalScanCard = ({
   onActivateJob,
   onFitBounds,
 }) => {
-  const activeCount = jobs.filter((job) =>
-    ACTIVE_STATUSES.has(String(job.status ?? '').toUpperCase()),
-  ).length
+  const provinceGroups = useMemo(() => groupMacroJobsByProvince(jobs), [jobs])
+  const activeCount = provinceGroups.filter((group) => group.active).length
 
   if (restricted) {
     return (
@@ -207,42 +196,51 @@ export const NationalScanCard = ({
             <Activity size={10} />
             Macro jobs
           </p>
-          <span className="font-mono text-[8px] text-slate-600">{jobs.length} total</span>
+          <span className="font-mono text-[8px] text-slate-600">
+            {provinceGroups.length} province{provinceGroups.length === 1 ? '' : 's'}
+          </span>
         </div>
 
         <div className="mt-2 space-y-1.5">
-          {jobs.length ? (
-            jobs.slice(0, 5).map((job) => {
-              const percent = progressOf(job)
-              const busy = ACTIVE_STATUSES.has(String(job.status ?? '').toUpperCase())
+          {provinceGroups.length ? (
+            provinceGroups.slice(0, 5).map((group) => {
+              const percent = group.totalTiles
+                ? Math.min(
+                    100,
+                    Math.round((group.processedTiles / group.totalTiles) * 100),
+                  )
+                : 0
+              const busy = group.active
+              const statusTone = statusClasses({ status: group.status })
               return (
                 <div
-                  key={job.job_id}
+                  key={group.key}
                   className="rounded-lg border border-slate-800/80 bg-slate-950/35 px-2 py-2"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="truncate font-mono text-[9px] font-medium text-slate-200">
-                        {job.name || `Macro ${job.job_id.slice(0, 8)}`}
+                        {group.label}
                       </p>
                       <p className="mt-0.5 truncate text-[8px] text-slate-600">
-                        {formatDateTime(job.created_at)} · {job.processed_tiles ?? 0}/
-                        {job.total_tiles ?? 0} tiles
+                        {formatDateTime(group.newest?.created_at)} · {group.jobs.length} cell job
+                        {group.jobs.length === 1 ? '' : 's'} · {group.processedTiles}/
+                        {group.totalTiles} tiles
                       </p>
                     </div>
                     <span
-                      className={`shrink-0 rounded border px-1 py-0.5 font-mono text-[7px] uppercase tracking-[0.1em] ${statusClasses(job.status)}`}
+                      className={`shrink-0 rounded border px-1 py-0.5 font-mono text-[7px] uppercase tracking-[0.1em] ${statusTone}`}
                     >
-                      {job.progress_status || job.status}
+                      {group.status}
                     </span>
                   </div>
 
                   <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-slate-800/80">
                     <div
                       className={`h-full rounded-full transition-all ${
-                        job.status === 'FAILED' || job.status === 'CANCELLED'
+                        group.status === 'FAILED' || group.status === 'CANCELLED'
                           ? 'bg-red-500/70'
-                          : job.status === 'COMPLETED'
+                          : group.status === 'COMPLETED'
                             ? 'bg-emerald-500/70'
                             : 'bg-cyan-400/70'
                       }`}
@@ -254,8 +252,8 @@ export const NationalScanCard = ({
                     <button
                       type="button"
                       onClick={() => {
-                        onActivateJob(job.job_id)
-                        if (job.bounds) onFitBounds(job.bounds)
+                        onActivateJob(group.newest.job_id)
+                        if (group.newest.bounds) onFitBounds(group.newest.bounds)
                       }}
                       className="flex items-center gap-1 rounded border border-cyan-500/25 bg-cyan-500/[0.06] px-1.5 py-0.5 text-[7.5px] font-semibold uppercase tracking-[0.1em] text-cyan-300 transition hover:bg-cyan-500/15"
                     >
@@ -263,14 +261,14 @@ export const NationalScanCard = ({
                       Review
                       <ChevronRight size={8} />
                     </button>
-                    {isResumable(job) ? (
+                    {group.resumable ? (
                       <button
                         type="button"
                         disabled={Boolean(resumingId)}
-                        onClick={() => onResume(job.job_id)}
+                        onClick={() => onResume(group.resumable.job_id)}
                         className="flex items-center gap-1 rounded border border-amber-500/25 bg-amber-500/[0.06] px-1.5 py-0.5 text-[7.5px] font-semibold uppercase tracking-[0.1em] text-amber-300 transition hover:bg-amber-500/15 disabled:opacity-40"
                       >
-                        {resumingId === job.job_id ? (
+                        {resumingId === group.resumable.job_id ? (
                           <Loader2 size={8} className="animate-spin" />
                         ) : (
                           <RotateCw size={8} />
