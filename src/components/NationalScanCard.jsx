@@ -1,4 +1,3 @@
-import { useMemo } from 'react'
 import {
   Activity,
   ChevronRight,
@@ -6,22 +5,19 @@ import {
   Loader2,
   LockKeyhole,
   MapPin,
-  Pause,
   Play,
   RotateCw,
-  Trash2,
   TriangleAlert,
 } from 'lucide-react'
 import { formatDateTime } from '../lib/constants'
-import { groupMacroJobsByProvince } from '../lib/macroJobs'
 import { GlassCard } from './ui/GlassCard'
 import { SectionHeader } from './ui/SectionHeader'
 
-const statusClasses = (job) => {
-  const value = String(job?.status ?? '').toUpperCase()
-  if (/RUNNING|IN_PROGRESS|PROGRESS|ACTIVE|PENDING|QUEUED|STARTING/.test(value)) {
-    return 'border-cyan-500/35 bg-cyan-500/10 text-cyan-300'
-  }
+const ACTIVE_STATUSES = new Set(['PENDING', 'RUNNING', 'QUEUED', 'STARTING'])
+
+const statusClasses = (status) => {
+  const value = String(status ?? '').toUpperCase()
+  if (ACTIVE_STATUSES.has(value)) return 'border-cyan-500/35 bg-cyan-500/10 text-cyan-300'
   if (value === 'COMPLETED') return 'border-emerald-500/35 bg-emerald-500/10 text-emerald-300'
   if (value === 'FAILED' || value === 'CANCELLED') {
     return 'border-red-500/35 bg-red-500/10 text-red-300'
@@ -34,6 +30,11 @@ const progressOf = (job) => {
   const done = Number(job?.processed_tiles ?? 0)
   if (!total) return 0
   return Math.min(100, Math.round((done / total) * 100))
+}
+
+const isResumable = (job) => {
+  const status = String(job?.status ?? '').toUpperCase()
+  return !ACTIVE_STATUSES.has(status) && status !== 'COMPLETED'
 }
 
 const EstimateItem = ({ label, value, tone = 'text-slate-200' }) => (
@@ -57,27 +58,14 @@ export const NationalScanCard = ({
   confidence,
   canLaunch,
   restricted,
-  role,
-  livePollingEnabled,
   onLaunch,
-  onWatchGlobal,
-  onToggleLivePolling,
-  onDeleteWaiting,
-  onHideJobs,
   onResume,
-  onActivateJobs,
+  onActivateJob,
   onFitBounds,
 }) => {
-  const provinceGroups = useMemo(() => groupMacroJobsByProvince(jobs), [jobs])
-  const activeCount = provinceGroups.filter((group) => group.active).length
-  const estimatedJobs = estimate
-    ? estimate.requires_subsectors
-      ? estimate.cells?.length ?? 0
-      : estimate.launchable
-        ? 1
-        : 0
-    : null
-  const boundaryBlocked = estimatedJobs === 0
+  const activeCount = jobs.filter((job) =>
+    ACTIVE_STATUSES.has(String(job.status ?? '').toUpperCase()),
+  ).length
 
   if (restricted) {
     return (
@@ -85,11 +73,11 @@ export const NationalScanCard = ({
         <SectionHeader
           icon={Globe}
           title="National scan"
-          subtitle={`Unattended Azure macro scan · role: ${role ?? 'unknown'}`}
+          subtitle="Unattended Azure macro scan. Results flow into the review queue."
           right={
             <span className="flex items-center gap-1 rounded-full border border-slate-700/70 bg-slate-900/60 px-1.5 py-0.5 font-mono text-[7.5px] uppercase tracking-[0.12em] text-slate-500">
               <LockKeyhole size={8} />
-              Admin only
+              Admin
             </span>
           }
         />
@@ -97,53 +85,9 @@ export const NationalScanCard = ({
           <LockKeyhole size={11} className="mt-0.5 shrink-0 text-amber-400/80" />
           <span>
             National scan controls require an admin role. Ask an administrator to launch the
-            countrywide scan. You can still watch detections arrive in the Global Registry tab —
-            it refreshes automatically.
+            countrywide scan; its candidates will appear in the global review queue.
           </span>
         </div>
-        <div className="mt-2 flex items-stretch gap-1.5">
-          <button
-            type="button"
-            onClick={onWatchGlobal}
-            className="flex h-8 min-w-0 flex-1 items-center justify-center gap-1 rounded-lg border border-cyan-500/30 bg-cyan-500/[0.07] px-1.5 text-[7.5px] font-semibold uppercase tracking-[0.06em] text-cyan-300 transition hover:bg-cyan-500/15"
-          >
-            <Activity size={10} />
-            <span className="truncate">Watch waiting</span>
-          </button>
-          <button
-            type="button"
-            onClick={onToggleLivePolling}
-            title={
-              livePollingEnabled
-                ? 'Pause dashboard polling only; the Azure scan keeps running'
-                : 'Resume live review polling'
-            }
-            className={`flex h-8 min-w-0 flex-1 items-center justify-center gap-1 rounded-lg border px-1.5 text-[7.5px] font-semibold uppercase tracking-[0.06em] transition ${
-              livePollingEnabled
-                ? 'border-slate-700/70 bg-slate-900/60 text-slate-300 hover:border-slate-600 hover:text-slate-100'
-                : 'border-emerald-500/35 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20'
-            }`}
-          >
-            {livePollingEnabled ? <Pause size={10} /> : <Play size={10} />}
-            <span className="truncate">
-              {livePollingEnabled ? 'Stop watching' : 'Resume watching'}
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={onDeleteWaiting}
-            aria-label="Delete waiting candidates"
-            title="Delete waiting candidates from this browser queue only"
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-red-500/25 bg-red-500/[0.06] text-red-300 transition hover:bg-red-500/15"
-          >
-            <Trash2 size={12} />
-          </button>
-        </div>
-        {!livePollingEnabled ? (
-          <p className="mt-1.5 rounded-md border border-slate-700/70 bg-slate-900/50 px-2 py-1.5 font-mono text-[7.5px] leading-relaxed text-slate-500">
-            Live review polling is paused. The Azure scan continues in the background.
-          </p>
-        ) : null}
       </GlassCard>
     )
   }
@@ -153,7 +97,7 @@ export const NationalScanCard = ({
       <SectionHeader
         icon={Globe}
         title="National scan"
-        subtitle={`Unattended Azure macro scan · role: ${role ?? 'admin'}`}
+        subtitle="Unattended Azure macro scan. Results flow into the review queue."
         right={
           <span
             className={`flex items-center gap-1 rounded-full border px-1.5 py-0.5 font-mono text-[7.5px] uppercase tracking-[0.12em] ${
@@ -171,50 +115,6 @@ export const NationalScanCard = ({
           </span>
         }
       />
-
-      <div className="mt-2.5 flex items-stretch gap-1.5">
-        <button
-          type="button"
-          onClick={onWatchGlobal}
-          className="flex h-8 min-w-0 flex-1 items-center justify-center gap-1 rounded-lg border border-cyan-500/30 bg-cyan-500/[0.07] px-1.5 text-[7.5px] font-semibold uppercase tracking-[0.06em] text-cyan-300 transition hover:bg-cyan-500/15"
-        >
-          <Activity size={10} />
-          <span className="truncate">Watch waiting</span>
-        </button>
-        <button
-          type="button"
-          onClick={onToggleLivePolling}
-          title={
-            livePollingEnabled
-              ? 'Pause dashboard polling only; the Azure scan keeps running'
-              : 'Resume live review polling'
-          }
-          className={`flex h-8 min-w-0 flex-1 items-center justify-center gap-1 rounded-lg border px-1.5 text-[7.5px] font-semibold uppercase tracking-[0.06em] transition ${
-            livePollingEnabled
-              ? 'border-slate-700/70 bg-slate-900/60 text-slate-300 hover:border-slate-600 hover:text-slate-100'
-              : 'border-emerald-500/35 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20'
-          }`}
-        >
-          {livePollingEnabled ? <Pause size={10} /> : <Play size={10} />}
-          <span className="truncate">
-            {livePollingEnabled ? 'Stop watching' : 'Resume watching'}
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={onDeleteWaiting}
-          aria-label="Delete waiting candidates"
-          title="Delete waiting candidates from this browser queue only"
-          className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-red-500/25 bg-red-500/[0.06] text-red-300 transition hover:bg-red-500/15"
-        >
-          <Trash2 size={12} />
-        </button>
-      </div>
-      {!livePollingEnabled ? (
-        <p className="mt-1.5 rounded-md border border-slate-700/70 bg-slate-900/50 px-2 py-1.5 font-mono text-[7.5px] leading-relaxed text-slate-500">
-          Live review polling is paused. The Azure scan continues in the background.
-        </p>
-      ) : null}
 
       <div className="mt-3">
         <label
@@ -266,17 +166,17 @@ export const NationalScanCard = ({
             label="Est. days"
             value={Number(estimate.estimated_days ?? 0).toFixed(1)}
           />
-          <EstimateItem label="Jobs" value={estimatedJobs} tone="text-amber-300" />
-        </div>
-      ) : null}
-
-      {boundaryBlocked ? (
-        <div className="mt-2 flex items-start gap-1.5 rounded-md border border-amber-500/25 bg-amber-500/[0.06] px-2 py-1.5 text-[9px] leading-relaxed text-amber-200/90">
-          <TriangleAlert size={10} className="mt-0.5 shrink-0 text-amber-400/80" />
-          <span>
-            This boundary has no launchable cells. Azure cannot create a scan job for it — choose
-            another boundary.
-          </span>
+          <EstimateItem
+            label="Jobs"
+            value={
+              estimate.requires_subsectors
+                ? estimate.cells?.length ?? 0
+                : estimate.launchable
+                  ? 1
+                  : 0
+            }
+            tone="text-amber-300"
+          />
         </div>
       ) : null}
 
@@ -289,31 +189,16 @@ export const NationalScanCard = ({
 
       <button
         type="button"
-        disabled={!selectedBoundaryId || launching || !canLaunch || boundaryBlocked}
+        disabled={!selectedBoundaryId || launching || !canLaunch}
         onClick={onLaunch}
-        title={
-          boundaryBlocked
-            ? 'This boundary has no launchable cells'
-            : canLaunch
-              ? 'Launch unattended macro scan'
-              : 'Admin role required'
-        }
+        title={canLaunch ? 'Launch unattended macro scan' : 'Admin role required'}
         className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-lg border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.11em] text-emerald-300 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-40"
       >
         {launching ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
-        {launching
-          ? 'Queueing…'
-          : boundaryBlocked
-            ? 'No launchable cells'
-            : 'Launch unattended scan'}
+        {launching ? 'Queueing…' : 'Launch unattended scan'}
       </button>
       <p className="mt-1 text-center font-mono text-[7.5px] text-slate-600">
-        threshold {Math.round(confidence * 100)}% ·{' '}
-        {boundaryBlocked
-          ? 'boundary not launchable'
-          : canLaunch
-            ? 'admin controls'
-            : 'admin role required'}
+        threshold {Math.round(confidence * 100)}% · {canLaunch ? 'admin controls' : 'admin role required'}
       </p>
 
       <div className="mt-3 border-t border-slate-800/80 pt-2.5">
@@ -322,46 +207,42 @@ export const NationalScanCard = ({
             <Activity size={10} />
             Macro jobs
           </p>
-          <span className="font-mono text-[8px] text-slate-600">
-            {provinceGroups.length} province{provinceGroups.length === 1 ? '' : 's'}
-          </span>
+          <span className="font-mono text-[8px] text-slate-600">{jobs.length} total</span>
         </div>
 
         <div className="mt-2 space-y-1.5">
-          {provinceGroups.length ? (
-            provinceGroups.slice(0, 5).map((group) => {
-              const percent = progressOf(group)
-              const busy = group.active
-              const newestStatus = String(group.newest?.status ?? '').toUpperCase()
+          {jobs.length ? (
+            jobs.slice(0, 5).map((job) => {
+              const percent = progressOf(job)
+              const busy = ACTIVE_STATUSES.has(String(job.status ?? '').toUpperCase())
               return (
                 <div
-                  key={group.key}
+                  key={job.job_id}
                   className="rounded-lg border border-slate-800/80 bg-slate-950/35 px-2 py-2"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="truncate font-mono text-[9px] font-medium text-slate-200">
-                        {group.label}
+                        {job.name || `Macro ${job.job_id.slice(0, 8)}`}
                       </p>
                       <p className="mt-0.5 truncate text-[8px] text-slate-600">
-                        {formatDateTime(group.newest?.created_at)} · {group.jobs.length} cell job
-                        {group.jobs.length === 1 ? '' : 's'} · {group.processedTiles}/
-                        {group.totalTiles} tiles
+                        {formatDateTime(job.created_at)} · {job.processed_tiles ?? 0}/
+                        {job.total_tiles ?? 0} tiles
                       </p>
                     </div>
                     <span
-                      className={`shrink-0 rounded border px-1 py-0.5 font-mono text-[7px] uppercase tracking-[0.1em] ${statusClasses({ status: group.status })}`}
+                      className={`shrink-0 rounded border px-1 py-0.5 font-mono text-[7px] uppercase tracking-[0.1em] ${statusClasses(job.status)}`}
                     >
-                      {group.status}
+                      {job.progress_status || job.status}
                     </span>
                   </div>
 
                   <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-slate-800/80">
                     <div
                       className={`h-full rounded-full transition-all ${
-                        newestStatus === 'FAILED' || newestStatus === 'CANCELLED'
+                        job.status === 'FAILED' || job.status === 'CANCELLED'
                           ? 'bg-red-500/70'
-                          : newestStatus === 'COMPLETED'
+                          : job.status === 'COMPLETED'
                             ? 'bg-emerald-500/70'
                             : 'bg-cyan-400/70'
                       }`}
@@ -373,32 +254,23 @@ export const NationalScanCard = ({
                     <button
                       type="button"
                       onClick={() => {
-                        onActivateJobs(group.jobs.map((job) => job.job_id))
-                        if (group.bounds) onFitBounds(group.bounds)
+                        onActivateJob(job.job_id)
+                        if (job.bounds) onFitBounds(job.bounds)
                       }}
                       className="flex items-center gap-1 rounded border border-cyan-500/25 bg-cyan-500/[0.06] px-1.5 py-0.5 text-[7.5px] font-semibold uppercase tracking-[0.1em] text-cyan-300 transition hover:bg-cyan-500/15"
                     >
                       <MapPin size={8} />
-                      {busy ? 'Watch waiting' : 'Review'}
+                      Review
                       <ChevronRight size={8} />
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => onHideJobs(group.jobs.map((job) => job.job_id))}
-                      aria-label={`Hide all macro jobs in ${group.label}`}
-                      title="Hide all cell jobs for this province; the backend jobs are unchanged"
-                      className="grid h-[18px] w-[18px] shrink-0 place-items-center rounded border border-red-500/25 bg-red-500/[0.06] text-red-300 transition hover:bg-red-500/15"
-                    >
-                      <Trash2 size={9} />
-                    </button>
-                    {group.resumable ? (
+                    {isResumable(job) ? (
                       <button
                         type="button"
                         disabled={Boolean(resumingId)}
-                        onClick={() => onResume(group.resumable.job_id)}
+                        onClick={() => onResume(job.job_id)}
                         className="flex items-center gap-1 rounded border border-amber-500/25 bg-amber-500/[0.06] px-1.5 py-0.5 text-[7.5px] font-semibold uppercase tracking-[0.1em] text-amber-300 transition hover:bg-amber-500/15 disabled:opacity-40"
                       >
-                        {resumingId === group.resumable.job_id ? (
+                        {resumingId === job.job_id ? (
                           <Loader2 size={8} className="animate-spin" />
                         ) : (
                           <RotateCw size={8} />
@@ -416,18 +288,10 @@ export const NationalScanCard = ({
             })
           ) : (
             <div className="rounded-lg border border-dashed border-slate-800 bg-slate-950/25 px-3 py-3 text-center text-[9px] text-slate-500">
-              {loading
-                ? 'Loading macro jobs…'
-                : selectedBoundaryId
-                  ? 'No macro scans for this boundary yet.'
-                  : 'Select a boundary to see its macro jobs.'}
+              {loading ? 'Loading macro jobs…' : 'No macro scans launched yet.'}
             </div>
           )}
         </div>
-        <p className="mt-2 font-mono text-[7px] leading-relaxed text-slate-600">
-          Trash icons hide every cell job for that province in this browser only; they do not cancel
-          Azure jobs or change backend verdicts.
-        </p>
       </div>
     </GlassCard>
   )

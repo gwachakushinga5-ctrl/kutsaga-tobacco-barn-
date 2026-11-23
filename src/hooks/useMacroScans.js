@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { isActiveMacroJob, macroJobMatchesBoundary } from '../lib/macroJobs'
+import { useCallback, useEffect, useState } from 'react'
 import {
   getMacroEstimate,
   launchMacroScan,
@@ -7,6 +6,8 @@ import {
   listMacroScans,
   resumeMacroScan,
 } from '../services/api'
+
+const ACTIVE_STATUSES = new Set(['PENDING', 'RUNNING', 'QUEUED', 'STARTING'])
 
 const mergeJobs = (incoming, current) => {
   const byId = new Map(current.map((job) => [job.job_id, job]))
@@ -16,31 +17,9 @@ const mergeJobs = (incoming, current) => {
   )
 }
 
-const BOUNDARY_MAP_KEY = 'kutsaga.macroJobBoundaries'
-
-const loadJobBoundaryIds = () => {
-  try {
-    const raw = localStorage.getItem(BOUNDARY_MAP_KEY)
-    const parsed = raw ? JSON.parse(raw) : {}
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}
-  } catch {
-    return {}
-  }
-}
-
-const persistJobBoundaryIds = (map) => {
-  try {
-    localStorage.setItem(BOUNDARY_MAP_KEY, JSON.stringify(map))
-  } catch {
-    /* storage unavailable */
-  }
-}
-
-export const useMacroScans = ({ addToast, enabled = true, pollingEnabled = true }) => {
+export const useMacroScans = ({ addToast, enabled = true }) => {
   const [boundaries, setBoundaries] = useState([])
   const [jobs, setJobs] = useState([])
-  const [hiddenJobIds, setHiddenJobIds] = useState(() => new Set())
-  const [jobBoundaryIds, setJobBoundaryIds] = useState(loadJobBoundaryIds)
   const [selectedBoundaryId, setSelectedBoundaryId] = useState('')
   const [estimate, setEstimate] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -76,24 +55,6 @@ export const useMacroScans = ({ addToast, enabled = true, pollingEnabled = true 
     }
   }, [])
 
-  const selectedBoundary = useMemo(
-    () => boundaries.find((item) => item.boundary_id === selectedBoundaryId) ?? null,
-    [boundaries, selectedBoundaryId],
-  )
-
-  const visibleJobs = useMemo(() => {
-    const withBoundary = jobs.map((job) =>
-      jobBoundaryIds[job.job_id]
-        ? { ...job, boundary_id: jobBoundaryIds[job.job_id] }
-        : job,
-    )
-    return withBoundary.filter(
-      (job) =>
-        !hiddenJobIds.has(job.job_id) &&
-        macroJobMatchesBoundary(job, selectedBoundary, selectedBoundaryId),
-    )
-  }, [hiddenJobIds, jobBoundaryIds, jobs, selectedBoundary, selectedBoundaryId])
-
   useEffect(() => {
     if (!enabled) {
       setLoading(false)
@@ -128,14 +89,16 @@ export const useMacroScans = ({ addToast, enabled = true, pollingEnabled = true 
   }, [enabled, selectedBoundaryId])
 
   useEffect(() => {
-    if (!enabled || !pollingEnabled) return undefined
-    const hasActiveJob = visibleJobs.some(isActiveMacroJob)
+    if (!enabled) return undefined
+    const hasActiveJob = jobs.some((job) =>
+      ACTIVE_STATUSES.has(String(job.status ?? '').toUpperCase()),
+    )
     const interval = window.setInterval(
       () => loadJobs({ quiet: true }),
       hasActiveJob ? 5000 : 15000,
     )
     return () => window.clearInterval(interval)
-  }, [enabled, pollingEnabled, visibleJobs, loadJobs])
+  }, [enabled, jobs, loadJobs])
 
   const launch = useCallback(
     async (confidence) => {
@@ -148,18 +111,6 @@ export const useMacroScans = ({ addToast, enabled = true, pollingEnabled = true 
         return null
       }
 
-      const jobCount = estimate
-        ? estimate.requires_subsectors
-          ? estimate.cells?.length ?? 0
-          : estimate.launchable
-            ? 1
-            : 0
-        : null
-      if (jobCount === 0) {
-        addToast('This boundary has no launchable cells — choose another boundary', 'error')
-        return null
-      }
-
       setLaunching(true)
       try {
         const result = await launchMacroScan({
@@ -169,14 +120,6 @@ export const useMacroScans = ({ addToast, enabled = true, pollingEnabled = true 
         })
         const launchedJobs = Array.isArray(result?.jobs) ? result.jobs : []
         setJobs((current) => mergeJobs(launchedJobs, current))
-        if (launchedJobs.length) {
-          const nextMap = { ...jobBoundaryIds }
-          launchedJobs.forEach((job) => {
-            nextMap[job.job_id] = selectedBoundaryId
-          })
-          setJobBoundaryIds(nextMap)
-          persistJobBoundaryIds(nextMap)
-        }
         addToast(
           `${result?.job_count ?? launchedJobs.length} unattended macro scan job${
             result?.job_count === 1 ? '' : 's'
@@ -191,7 +134,7 @@ export const useMacroScans = ({ addToast, enabled = true, pollingEnabled = true 
         setLaunching(false)
       }
     },
-    [addToast, enabled, estimate, jobBoundaryIds, selectedBoundaryId],
+    [addToast, enabled, estimate?.name, selectedBoundaryId],
   )
 
   const resume = useCallback(
@@ -216,27 +159,9 @@ export const useMacroScans = ({ addToast, enabled = true, pollingEnabled = true 
     [addToast, enabled, loadJobs],
   )
 
-  const hideJob = useCallback(
-    (jobIdOrIds) => {
-      const ids = Array.isArray(jobIdOrIds) ? jobIdOrIds : [jobIdOrIds]
-      setHiddenJobIds((current) => {
-        const next = new Set(current)
-        ids.forEach((id) => next.add(id))
-        return next
-      })
-      addToast(
-        `${ids.length} macro job${ids.length === 1 ? '' : 's'} hidden from this list. The backend job${
-          ids.length === 1 ? ' is' : 's are'
-        } unchanged.`,
-        'info',
-      )
-    },
-    [addToast],
-  )
-
   return {
     boundaries,
-    jobs: visibleJobs,
+    jobs,
     selectedBoundaryId,
     setSelectedBoundaryId,
     estimate,
@@ -247,7 +172,6 @@ export const useMacroScans = ({ addToast, enabled = true, pollingEnabled = true 
     error,
     launch,
     resume,
-    hideJob,
     refreshJobs: loadJobs,
   }
 }

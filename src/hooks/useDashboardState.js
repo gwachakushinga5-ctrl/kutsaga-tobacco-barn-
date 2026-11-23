@@ -23,7 +23,6 @@ import {
 } from '../services/api'
 
 const CANDIDATE_LIMIT = 500
-const JOB_REQUEST_CONCURRENCY = 3
 const POLL_INTERVAL_MS = 1500
 const MAX_SCAN_MS = 20 * 60 * 1000
 const DISMISSED_KEY = 'kutsaga.dismissedCandidates'
@@ -91,61 +90,7 @@ const mostRecentJobId = (detections, explicitJobId) => {
   return best
 }
 
-const jobIdList = (value, fallback = []) => {
-  if (Array.isArray(value)) return value.filter(Boolean)
-  if (value) return [value]
-  return fallback
-}
-
-const mergeCandidateCounts = (countsList) =>
-  countsList.reduce(
-    (combined, counts) => {
-      Object.entries(counts ?? {}).forEach(([key, value]) => {
-        combined[key] = (Number(combined[key]) || 0) + (Number(value) || 0)
-      })
-      return combined
-    },
-    { ...INITIAL_COUNTS },
-  )
-
-const countsFromDetections = (detections) =>
-  detections.reduce(
-    (counts, detection) => {
-      if (counts[detection.status] != null) counts[detection.status] += 1
-      counts.total += 1
-      return counts
-    },
-    { ...INITIAL_COUNTS },
-  )
-
-const detectionsForJobs = (detections, ids) => {
-  const idSet = new Set(ids)
-  return detections.filter((detection) => idSet.has(detection.scanJobId))
-}
-
-const settledMapWithConcurrency = async (items, limit, mapper) => {
-  const results = new Array(items.length)
-  let cursor = 0
-
-  const worker = async () => {
-    while (cursor < items.length) {
-      const index = cursor
-      cursor += 1
-      try {
-        results[index] = { ok: true, value: await mapper(items[index], index) }
-      } catch (error) {
-        results[index] = { ok: false, error }
-      }
-    }
-  }
-
-  await Promise.all(
-    Array.from({ length: Math.min(limit, items.length) }, () => worker()),
-  )
-  return results
-}
-
-export const useDashboardState = ({ livePollingEnabled = true } = {}) => {
+export const useDashboardState = () => {
   const [detections, setDetections] = useState([])
   const [scanDetections, setScanDetections] = useState([])
   const [trbRegistry, setTrbRegistry] = useState([])
@@ -162,7 +107,6 @@ export const useDashboardState = ({ livePollingEnabled = true } = {}) => {
   const [dismissedIds, setDismissedIds] = useState(loadDismissed)
   const [scanStatus, setScanStatus] = useState('IDLE')
   const [scanJobId, setScanJobId] = useState(null)
-  const [scanJobIds, setScanJobIds] = useState([])
   const [telemetry, setTelemetry] = useState(INITIAL_TELEMETRY)
   const [countsByScope, setCountsByScope] = useState({
     global: INITIAL_COUNTS,
@@ -309,50 +253,30 @@ export const useDashboardState = ({ livePollingEnabled = true } = {}) => {
   }, [])
 
   const refresh = useCallback(
-    async (jobIds = scanJobId) => {
+    async (jobId = scanJobId) => {
       setLoading(true)
       try {
         const spatialParams = bboxFilter ? { bbox: bboxFilter } : {}
-        const [candidateResult, countsResult, groundTruthResult] = await Promise.allSettled([
+        const [globalList, globalCounts, groundTruth] = await Promise.all([
           loadCandidates({ scope: 'all', ...spatialParams }),
           loadCounts({ scope: 'all' }),
           getGroundTruth({ limit: 5000 }),
         ])
 
-        if (candidateResult.status === 'rejected') throw candidateResult.reason
-        const globalList = candidateResult.value
-
         setDetections(globalList)
-        if (countsResult.status === 'fulfilled') {
-          setCountsByScope((current) => ({ ...current, global: countsResult.value }))
-        }
-        if (groundTruthResult.status === 'fulfilled') {
-          const groundTruth = groundTruthResult.value
-          setTrbRegistry(
-            (groundTruth?.features ?? [])
-              .filter(hasPointCoordinates)
-              .map(groundTruthToTrb),
-          )
-        }
+        setCountsByScope((current) => ({ ...current, global: globalCounts }))
+        setTrbRegistry(
+          (groundTruth?.features ?? [])
+            .filter(hasPointCoordinates)
+            .map(groundTruthToTrb),
+        )
 
-        let ids = jobIdList(jobIds, scanJobIds)
-        if (!ids.length) {
-          const inferred = mostRecentJobId(globalList, null)
-          ids = inferred ? [inferred] : []
-        }
-
-        if (ids.length) {
-          const currentList = detectionsForJobs(globalList, ids)
-          const countResults = await settledMapWithConcurrency(
-            ids,
-            JOB_REQUEST_CONCURRENCY,
-            (id) => loadCounts({ scan_job_id: id }),
-          )
-          const allCountsOk = countResults.every((result) => result.ok)
-          const currentCounts = allCountsOk
-            ? mergeCandidateCounts(countResults.map((result) => result.value))
-            : countsFromDetections(currentList)
-
+        const currentJobId = mostRecentJobId(globalList, jobId)
+        if (currentJobId) {
+          const [currentList, currentCounts] = await Promise.all([
+            loadCandidates({ scan_job_id: currentJobId, ...spatialParams }),
+            loadCounts({ scan_job_id: currentJobId }),
+          ])
           setScanDetections(currentList)
           setCountsByScope((current) => ({ ...current, current: currentCounts }))
         } else {
@@ -365,7 +289,7 @@ export const useDashboardState = ({ livePollingEnabled = true } = {}) => {
         setLoading(false)
       }
     },
-    [addToast, bboxFilter, loadCandidates, loadCounts, scanJobId, scanJobIds],
+    [addToast, bboxFilter, loadCandidates, loadCounts, scanJobId],
   )
 
   useEffect(() => {
@@ -378,88 +302,42 @@ export const useDashboardState = ({ livePollingEnabled = true } = {}) => {
       initialBoundsRef.current = false
       return undefined
     }
-    const activeIds = scanJobIds.length ? scanJobIds : scanJobId ? [scanJobId] : []
-    const timer = window.setTimeout(() => refresh(activeIds), 500)
+    const timer = window.setTimeout(() => refresh(scanJobId), 500)
     return () => window.clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bboxFilter, scanJobId, scanJobIds])
+  }, [bboxFilter])
 
   const refreshCounts = useCallback(async () => {
     try {
-      const ids = scanJobIds.length ? scanJobIds : scanJobId ? [scanJobId] : []
-      const [globalCounts, countResults] = await Promise.all([
+      const [globalCounts, currentCounts] = await Promise.all([
         loadCounts({ scope: 'all' }),
-        settledMapWithConcurrency(ids, JOB_REQUEST_CONCURRENCY, (id) =>
-          loadCounts({ scan_job_id: id }),
-        ),
+        scanJobId
+          ? loadCounts({ scan_job_id: scanJobId })
+          : Promise.resolve(INITIAL_COUNTS),
       ])
-      const allCountsOk = countResults.every((result) => result.ok)
-      const currentCounts = ids.length
-        ? allCountsOk
-          ? mergeCandidateCounts(countResults.map((result) => result.value))
-          : countsFromDetections(detectionsForJobs(detections, ids))
-        : INITIAL_COUNTS
-
-      setCountsByScope((current) => ({ ...current, global: globalCounts, current: currentCounts }))
+      setCountsByScope((current) => ({
+        ...current,
+        global: globalCounts,
+        current: currentCounts,
+      }))
     } catch {
       // Live counter polling is best-effort; the next review or scan reloads it.
     }
-  }, [detections, loadCounts, scanJobId, scanJobIds])
+  }, [loadCounts, scanJobId])
 
   useEffect(() => {
-    if (!livePollingEnabled) return undefined
     const timer = window.setInterval(() => {
       if (!document.hidden) refreshCounts()
     }, 8000)
     return () => window.clearInterval(timer)
-  }, [livePollingEnabled, refreshCounts])
-
-  const pollRegistry = useCallback(
-    async (jobIds = scanJobIds.length ? scanJobIds : scanJobId) => {
-      try {
-        const ids = jobIdList(jobIds)
-        const spatialParams = bboxFilter ? { bbox: bboxFilter } : {}
-        const [globalList, globalCounts, countResults] = await Promise.all([
-          loadCandidates({ scope: 'all', ...spatialParams }),
-          loadCounts({ scope: 'all' }).catch(() => null),
-          settledMapWithConcurrency(ids, JOB_REQUEST_CONCURRENCY, (id) =>
-            loadCounts({ scan_job_id: id }),
-          ),
-        ])
-
-        const currentList = detectionsForJobs(globalList, ids)
-        const allCountsOk = countResults.every((result) => result.ok)
-        const currentCounts = allCountsOk
-          ? mergeCandidateCounts(countResults.map((result) => result.value))
-          : countsFromDetections(currentList)
-
-        setDetections(globalList)
-        setCountsByScope((current) => ({
-          ...current,
-          ...(globalCounts ? { global: globalCounts } : {}),
-          ...(ids.length ? { current: currentCounts } : {}),
-        }))
-        if (ids.length) {
-          setScanDetections((current) => [
-            ...current.filter((detection) => detection.source === 'gemini'),
-            ...currentList,
-          ])
-        }
-      } catch {
-        // Live registry polling is best-effort; the next manual refresh reloads it.
-      }
-    },
-    [bboxFilter, loadCandidates, loadCounts, scanJobId, scanJobIds],
-  )
+  }, [refreshCounts])
 
   const activateJob = useCallback(
-    (jobIds) => {
-      const ids = jobIdList(jobIds)
-      setScanJobIds(ids)
-      setScanJobId(ids[0] ?? null)
+    (jobId) => {
+      setScanJobId(jobId)
       setActiveTab('current')
-      setStatusFilter('waiting')
-      refresh(ids)
+      setStatusFilter('all')
+      refresh(jobId)
     },
     [refresh],
   )
@@ -493,7 +371,6 @@ export const useDashboardState = ({ livePollingEnabled = true } = {}) => {
           confidenceThreshold: threshold,
         })
         setScanJobId(submission.job_id)
-        setScanJobIds([submission.job_id])
         setTelemetry((current) => ({
           ...current,
           tilesTotal: submission.total_tiles ?? 0,
@@ -612,7 +489,6 @@ export const useDashboardState = ({ livePollingEnabled = true } = {}) => {
     setActiveTab('global')
     setStatusFilter('waiting')
     setScanStatus('IDLE')
-    setScanJobIds([])
     setTelemetry((current) => ({
       ...current,
       tilesDone: 0,
@@ -653,30 +529,6 @@ export const useDashboardState = ({ livePollingEnabled = true } = {}) => {
     setSelectedId(null)
     addToast(`${all.length} barn${all.length === 1 ? '' : 's'} removed from the approval queue`, 'info')
   }, [addToast, detections, scanDetections])
-
-  const removeWaitingDetections = useCallback(() => {
-    const waiting = [...detections, ...scanDetections].filter(
-      (detection) => detection.status === 'waiting' && !dismissedIds.has(detection.id),
-    )
-    if (!waiting.length) {
-      addToast('No waiting candidates to delete', 'info')
-      return 0
-    }
-    setDismissedIds((current) => {
-      const next = new Set(current)
-      waiting.forEach((detection) => next.add(detection.id))
-      persistDismissed(next)
-      return next
-    })
-    setSelectedId((current) =>
-      waiting.some((detection) => detection.id === current) ? null : current,
-    )
-    addToast(
-      `${waiting.length} waiting candidate${waiting.length === 1 ? '' : 's'} deleted from this queue`,
-      'info',
-    )
-    return waiting.length
-  }, [addToast, detections, dismissedIds, scanDetections])
 
   const resetFilters = useCallback(() => {
     setStatusFilter('all')
@@ -733,26 +585,14 @@ export const useDashboardState = ({ livePollingEnabled = true } = {}) => {
         setScanDetections((current) => current.map(patch))
 
         if (!isGeminiLocal) {
-          const ids = scanJobIds.length ? scanJobIds : scanJobId ? [scanJobId] : []
           Promise.allSettled([
             loadCounts({ scope: 'all' }).then((value) =>
               setCountsByScope((current) => ({ ...current, global: value })),
             ),
-            ids.length
-              ? settledMapWithConcurrency(ids, JOB_REQUEST_CONCURRENCY, (id) =>
-                  loadCounts({ scan_job_id: id }),
-                ).then((results) => {
-                  const allCountsOk = results.every((result) => result.ok)
-                  const fallback = detectionsForJobs(detections, ids).map((item) =>
-                    item.id === detectionId ? { ...item, status } : item,
-                  )
-                  setCountsByScope((current) => ({
-                    ...current,
-                    current: allCountsOk
-                      ? mergeCandidateCounts(results.map((result) => result.value))
-                      : countsFromDetections(fallback),
-                  }))
-                })
+            scanJobId
+              ? loadCounts({ scan_job_id: scanJobId }).then((value) =>
+                  setCountsByScope((current) => ({ ...current, current: value })),
+                )
               : Promise.resolve(),
           ])
         }
@@ -769,7 +609,7 @@ export const useDashboardState = ({ livePollingEnabled = true } = {}) => {
         setReviewing(false)
       }
     },
-    [addToast, detections, loadCounts, scanDetections, scanJobId, scanJobIds],
+    [addToast, detections, loadCounts, scanDetections, scanJobId],
   )
 
   const exportRejectedToLearning = useCallback(async () => {
@@ -843,7 +683,6 @@ export const useDashboardState = ({ livePollingEnabled = true } = {}) => {
     loading,
     refresh,
     refreshCounts,
-    pollRegistry,
     activateJob,
     selectedDetection,
     selectedId,
@@ -851,9 +690,7 @@ export const useDashboardState = ({ livePollingEnabled = true } = {}) => {
     clearSelection: () => setSelectedId(null),
     removeDetection,
     removeAllDetections,
-    removeWaitingDetections,
     scanJobId,
-    scanJobIds,
     scanStatus,
     telemetry,
     runScan,

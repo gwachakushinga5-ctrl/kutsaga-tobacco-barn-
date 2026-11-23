@@ -19,7 +19,6 @@ import { useAuth } from './hooks/useAuth'
 import { useDashboardState } from './hooks/useDashboardState'
 import { useMacroScans } from './hooks/useMacroScans'
 import { MAP_CENTER, MAP_ZOOM, ZONES } from './lib/constants'
-import { isActiveMacroJob } from './lib/macroJobs'
 import {
   boundsFromLeaflet,
   boundsOfPoints,
@@ -64,14 +63,11 @@ const clampAoi = (points, bounds) => {
 }
 
 const Dashboard = ({ user, onSignOut }) => {
-  const [livePollingEnabled, setLivePollingEnabled] = useState(true)
-  const dashboard = useDashboardState({ livePollingEnabled })
-  const userRole = String(user?.role ?? 'unknown')
-  const canLaunchMacro = ['admin', 'api'].includes(userRole.toLowerCase())
+  const dashboard = useDashboardState()
+  const canLaunchMacro = ['admin', 'api'].includes(String(user?.role ?? '').toLowerCase())
   const macro = useMacroScans({
     addToast: dashboard.addToast,
     enabled: canLaunchMacro,
-    pollingEnabled: livePollingEnabled,
   })
   const mapRef = useRef(null)
   const [layers, setLayers] = useState({
@@ -301,40 +297,12 @@ const Dashboard = ({ user, onSignOut }) => {
     dashboard.setBboxEnabled((current) => !current)
   }, [dashboard])
 
-  const handleWatchGlobal = useCallback(() => {
-    setLivePollingEnabled(true)
-    dashboard.setActiveTab('global')
-    dashboard.setStatusFilter('waiting')
-    dashboard.setBboxEnabled(false)
-    dashboard.addToast('Watching new candidates in Waiting approval', 'info')
-  }, [dashboard])
-
-  const handleActivateJobs = useCallback(
-    (jobIds) => {
-      setLivePollingEnabled(true)
-      dashboard.activateJob(jobIds)
-    },
-    [dashboard],
-  )
-
-  const handleToggleLivePolling = useCallback(() => {
-    const next = !livePollingEnabled
-    setLivePollingEnabled(next)
-    dashboard.addToast(
-      next
-        ? 'Live review polling resumed'
-        : 'Live review paused — the Azure scan keeps running',
-      'info',
-    )
-  }, [dashboard, livePollingEnabled])
-
   const handleLaunchMacro = useCallback(async () => {
     const result = await macro.launch(confidence)
-    const jobs = Array.isArray(result?.jobs) ? result.jobs : []
-    if (jobs.length) {
-      setLivePollingEnabled(true)
-      dashboard.activateJob(jobs.map((job) => job.job_id))
-      fitMacroBounds(jobs[0].bounds)
+    const firstJob = result?.jobs?.[0]
+    if (firstJob) {
+      dashboard.activateJob(firstJob.job_id)
+      fitMacroBounds(firstJob.bounds)
     }
   }, [confidence, dashboard, fitMacroBounds, macro])
 
@@ -348,10 +316,6 @@ const Dashboard = ({ user, onSignOut }) => {
     [macro.jobs],
   )
   const seenMacroIds = useRef(null)
-  const pollRegistry = dashboard.pollRegistry
-  const scanJobId = dashboard.scanJobId
-  const scanJobIds = dashboard.scanJobIds
-  const hasActiveMacro = useMemo(() => macro.jobs.some(isActiveMacroJob), [macro.jobs])
 
   useEffect(() => {
     if (seenMacroIds.current === null) {
@@ -366,18 +330,6 @@ const Dashboard = ({ user, onSignOut }) => {
     dashboard.refresh(newlyCompleted)
     dashboard.addToast('Macro scan results loaded into the review queue', 'success')
   }, [completedMacroIds, dashboard])
-
-  useEffect(() => {
-    if (!livePollingEnabled) return undefined
-    const activeIds = scanJobIds.length ? scanJobIds : scanJobId ? [scanJobId] : []
-    const activeJobIds = hasActiveMacro ? activeIds : []
-    const poll = () => {
-      if (!document.hidden) pollRegistry(activeJobIds)
-    }
-    poll()
-    const timer = window.setInterval(poll, activeJobIds.length ? 4000 : 8000)
-    return () => window.clearInterval(timer)
-  }, [hasActiveMacro, livePollingEnabled, pollRegistry, scanJobId, scanJobIds])
 
   useEffect(() => {
     if (!taxonomySelection?.autoSubmit || !taxonomySelection.code) return
@@ -497,15 +449,9 @@ const Dashboard = ({ user, onSignOut }) => {
             confidence={confidence}
             canLaunch={canLaunchMacro}
             restricted={!canLaunchMacro}
-            role={userRole}
-            livePollingEnabled={livePollingEnabled}
             onLaunch={handleLaunchMacro}
-            onWatchGlobal={handleWatchGlobal}
-            onToggleLivePolling={handleToggleLivePolling}
-            onDeleteWaiting={dashboard.removeWaitingDetections}
-            onHideJobs={macro.hideJob}
             onResume={macro.resume}
-            onActivateJobs={handleActivateJobs}
+            onActivateJob={dashboard.activateJob}
             onFitBounds={fitMacroBounds}
           />
           <ApprovalQueueCard
@@ -529,8 +475,7 @@ const Dashboard = ({ user, onSignOut }) => {
             onExport={dashboard.exportRejectedToLearning}
             exporting={dashboard.exporting}
             loading={dashboard.loading}
-            live={livePollingEnabled}
-            onToggleLivePolling={handleToggleLivePolling}
+            live
           />
           <ReviewFiltersCard
             statusFilter={dashboard.statusFilter}

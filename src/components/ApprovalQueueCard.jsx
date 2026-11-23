@@ -55,7 +55,6 @@ export const ApprovalQueueCard = ({
   onExport,
   exporting,
   live,
-  onToggleLivePolling,
 }) => {
   const tabs = [
     { value: 'global', label: 'Global Registry' },
@@ -70,14 +69,11 @@ export const ApprovalQueueCard = ({
         subtitle="Persistent registry. Click a row to inspect its Z18 crop."
         right={
           <div className="flex shrink-0 items-center gap-1.5">
-            <button
-              type="button"
-              onClick={onToggleLivePolling}
-              title={live ? 'Pause live polling' : 'Resume live polling'}
-              className={`flex items-center gap-1 rounded-full border px-1.5 py-0.5 font-mono text-[7.5px] uppercase tracking-[0.12em] transition ${
+            <span
+              className={`flex items-center gap-1 rounded-full border px-1.5 py-0.5 font-mono text-[7.5px] uppercase tracking-[0.12em] ${
                 live
-                  ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20'
-                  : 'border-slate-700/70 bg-slate-900/60 text-slate-500 hover:border-slate-600 hover:text-slate-300'
+                  ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+                  : 'border-slate-700/70 bg-slate-900/60 text-slate-500'
               }`}
             >
               <span
@@ -85,17 +81,17 @@ export const ApprovalQueueCard = ({
                   live ? 'animate-pulse bg-emerald-300' : 'bg-slate-600'
                 }`}
               />
-              {live ? 'Live' : 'Paused'}
-            </button>
+              Live
+            </span>
             <button
               type="button"
               onClick={onRemoveAll}
               disabled={!counts.total}
-              aria-label="Remove all mapped barns from the approval queue"
               title="Remove all mapped barns from the approval queue"
-              className="grid h-6 w-6 place-items-center rounded-md border border-red-500/25 bg-red-500/[0.07] text-red-300 transition hover:border-red-500/45 hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-30"
+              className="flex items-center gap-1 rounded-md border border-red-500/25 bg-red-500/[0.07] px-1.5 py-1 text-[7.5px] font-semibold uppercase tracking-[0.1em] text-red-300 transition hover:border-red-500/45 hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-30"
             >
-              <Trash2 size={10} />
+              <Trash2 size={9} />
+              Remove all
             </button>
             <span className="grid h-6 min-w-6 place-items-center rounded-full border border-amber-500/40 bg-amber-500/15 px-1.5 font-mono text-[10px] font-bold text-amber-300 shadow-[0_0_16px_-4px_rgba(245,158,11,0.7)]">
               {counts.waiting}
@@ -275,9 +271,7 @@ export const ApprovalQueueCard = ({
             )}
             <p className="text-[10px] text-slate-400">
               {activeTab === 'current'
-                ? live
-                  ? 'Scanning now. New candidates will appear here as soon as they are committed.'
-                  : 'No current scan results yet. Run a zone scan or inspect the imagery manually.'
+                ? 'No current scan results yet. Run a zone scan or inspect the imagery manually.'
                 : 'No candidates to show. The registry is empty or the active filters exclude everything.'}
             </p>
           </div>
