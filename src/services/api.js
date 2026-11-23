@@ -84,8 +84,11 @@ const toQuery = (params = {}) => {
 }
 
 const extractDetail = async (response) => {
+  const raw = await response.text()
+  if (!raw.trim()) return null
+
   try {
-    const data = await response.json()
+    const data = JSON.parse(raw)
     if (typeof data?.detail === 'string') return data.detail
     if (Array.isArray(data?.detail) && data.detail.length) {
       return data.detail
@@ -94,9 +97,10 @@ const extractDetail = async (response) => {
     }
     if (data?.message) return data.message
   } catch {
-    /* not JSON */
+    /* not JSON — return the raw body below */
   }
-  return null
+
+  return raw.trim().slice(0, 400)
 }
 
 const request = async (path, { method = 'GET', body, headers = {}, signal } = {}) => {
@@ -118,8 +122,9 @@ const request = async (path, { method = 'GET', body, headers = {}, signal } = {}
 
   if (!response.ok) {
     const detail = await extractDetail(response)
+    const message = detail || `Request failed (${response.status})`
     throw new ApiError(
-      detail || `Request failed (${response.status}) · ${method} ${path}`,
+      response.status >= 500 ? `${message} · ${method} ${path}` : message,
       response.status,
     )
   }
