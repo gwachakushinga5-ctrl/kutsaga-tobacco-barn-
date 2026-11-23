@@ -329,14 +329,8 @@ const Dashboard = ({ user, onSignOut }) => {
   }, [dashboard, livePollingEnabled])
 
   const handleLaunchMacro = useCallback(async () => {
-    const result = await macro.launch(confidence)
-    const jobs = Array.isArray(result?.jobs) ? result.jobs : []
-    if (jobs.length) {
-      setLivePollingEnabled(true)
-      dashboard.activateJob(jobs.map((job) => job.job_id))
-      fitMacroBounds(jobs[0].bounds)
-    }
-  }, [confidence, dashboard, fitMacroBounds, macro])
+    await macro.launch(confidence)
+  }, [confidence, macro])
 
   const completedMacroIds = useMemo(
     () =>
