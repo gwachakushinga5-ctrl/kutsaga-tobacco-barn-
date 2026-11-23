@@ -4,7 +4,8 @@
 **Detected:** 23 Nov 2026
 **Production dashboard:** https://kutsaga-tobacco-barn-public-ten.vercel.app
 **Azure app:** `kutsaga-app.livelybush-d14e9c76.switzerlandnorth.azurecontainerapps.io`
-(region: Switzerland North; Azure environment name: `livelybush-d14e9c76` — likely the deployer/owner)
+(region: Switzerland North. Note: `livelybush-d14e9c76` is an Azure **auto-generated** environment
+name — it is not a company or person; public searches found no owner there.)
 
 ## Summary
 
@@ -59,13 +60,22 @@ Resume was tested and does not recover the jobs.
 
 ## Finding the Azure owner
 
-- The environment name `livelybush-d14e9c76` suggests the deployer is a person/company called **Livelybush**.
-  Search business/LinkedIn directories for "Livelybush" + Kutsaga / tobacco / Zimbabwe.
-- Check email for an **Azure portal invitation, subscription invoice, or Microsoft billing receipt** —
-  the billing/inviting address identifies the subscription owner.
-- Check browser saved logins for `portal.azure.com` / `azure.microsoft.com`.
-- Ask whoever supplied the Azure URL, model (`production:a2546977`), or admin credentials — they are
-  the owner or can name them.
+Searched already with no result: web/LinkedIn for "livelybush", GitHub user/org lookups, the Azure
+OpenAPI spec (no contact field), local Azure CLI config (`~/.azure` absent), Chrome history (no Azure
+Portal visits), and local setup files. The GitHub account `gwachakushinga5-ctrl` only holds the
+frontend/data projects, none with backend deploy config.
+
+Most reliable next steps for the account holder:
+
+1. **Search Gmail/inbox** for: `Azure`, `Microsoft`, `portal.azure.com`, `kutsaga-app`,
+   `azurecontainerapps`, `subscription`, `invoice`. The Azure portal invitation or billing receipt
+   names the subscription owner/ billing contact.
+2. **Check saved browser logins** for `portal.azure.com` / `login.microsoftonline.com` — the stored
+   username is the account with access.
+3. **Trace who gave you the Azure URL, the model `production:a2546977`, or the admin login** — that
+   person is the owner or can name them.
+4. **Check the Azure app's Access Control (IAM)** once any account can open the portal — the Owner
+   role assignment gives the name directly.
 
 ## Forwardable message
 
