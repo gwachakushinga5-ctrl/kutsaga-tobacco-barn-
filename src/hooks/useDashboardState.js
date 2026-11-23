@@ -171,9 +171,9 @@ export const useDashboardState = ({ livePollingEnabled = true } = {}) => {
   const [loading, setLoading] = useState(true)
   const [toasts, setToasts] = useState([])
   const [taxonomyOpen, setTaxonomyOpen] = useState(false)
-  const [geminiLocate] = useState(true)
+  const [geminiLocate, setGeminiLocate] = useState(() => Boolean(getGeminiKey()))
   const [geminiStatus, setGeminiStatus] = useState(() =>
-    getGeminiKey() ? 'Gemini: key saved — ready' : 'Gemini: no API key — locate skipped',
+    getGeminiKey() ? 'Gemini: key saved — ready' : 'Gemini: locate off',
   )
   const [exporting, setExporting] = useState(false)
   const [reviewing, setReviewing] = useState(false)
@@ -190,13 +190,24 @@ export const useDashboardState = ({ livePollingEnabled = true } = {}) => {
   useEffect(() => {
     const onKeyChange = (event) => {
       const key = event.detail ?? ''
-      setGeminiStatus(key ? 'Gemini: key saved — ready' : 'Gemini: no API key — locate skipped')
+      setGeminiLocate(Boolean(key))
+      setGeminiStatus(key ? 'Gemini: key saved — ready' : 'Gemini: locate off')
     }
     window.addEventListener('kutsaga:geminiKey', onKeyChange)
     return () => window.removeEventListener('kutsaga:geminiKey', onKeyChange)
   }, [])
 
-  // Gemini locate is always on; the UI shows a fixed status instead of a toggle.
+  const toggleGeminiLocate = useCallback(() => {
+    const next = !geminiLocate
+    setGeminiLocate(next)
+    setGeminiStatus(
+      next
+        ? getGeminiKey()
+          ? 'Gemini: key saved — ready'
+          : 'Gemini: no API key — locate skipped'
+        : 'Gemini: locate off',
+    )
+  }, [geminiLocate])
 
   const allDetections = useMemo(() => {
     const scope = activeTab === 'current' ? scanDetections : detections
@@ -534,40 +545,44 @@ export const useDashboardState = ({ livePollingEnabled = true } = {}) => {
         await refresh(submission.job_id)
 
         let geminiCount = 0
-        const apiKey = getGeminiKey()
-        if (!apiKey) {
-          setGeminiStatus('Gemini: no API key — locate skipped')
-          addToast('Gemini locate is on but no API key is saved', 'info')
-        } else {
-          setGeminiStatus('Gemini: checking candidate barns…')
-          try {
-            const located = await locateBarnsInBounds({
-              bounds,
-              label,
-              apiKey,
-              trbRegistry,
-            })
-            geminiCount = located.length
-            setGeminiStatus(
-              located.length
-                ? `Gemini: ${located.length} barn${located.length === 1 ? '' : 's'} confirmed`
-                : 'Gemini: no barns confirmed',
-            )
-            if (located.length) {
-              setScanDetections((current) => [...located, ...current])
-              setCountsByScope((current) => ({
-                ...current,
-                current: {
-                  ...current.current,
-                  waiting: (current.current.waiting ?? 0) + located.length,
-                  total: (current.current.total ?? 0) + located.length,
-                },
-              }))
+        if (geminiLocate) {
+          const apiKey = getGeminiKey()
+          if (!apiKey) {
+            setGeminiStatus('Gemini: no API key — locate skipped')
+            addToast('Gemini locate is on but no API key is saved', 'info')
+          } else {
+            setGeminiStatus('Gemini: checking candidate barns…')
+            try {
+              const located = await locateBarnsInBounds({
+                bounds,
+                label,
+                apiKey,
+                trbRegistry,
+              })
+              geminiCount = located.length
+              setGeminiStatus(
+                located.length
+                  ? `Gemini: ${located.length} barn${located.length === 1 ? '' : 's'} confirmed`
+                  : 'Gemini: no barns confirmed',
+              )
+              if (located.length) {
+                setScanDetections((current) => [...located, ...current])
+                setCountsByScope((current) => ({
+                  ...current,
+                  current: {
+                    ...current.current,
+                    waiting: (current.current.waiting ?? 0) + located.length,
+                    total: (current.current.total ?? 0) + located.length,
+                  },
+                }))
+              }
+            } catch (error) {
+              setGeminiStatus(`Gemini: error — ${error.message}`)
+              addToast(`Gemini locate skipped: ${error.message}`, 'info')
             }
-          } catch (error) {
-            setGeminiStatus(`Gemini: error — ${error.message}`)
-            addToast(`Gemini locate skipped: ${error.message}`, 'info')
           }
+        } else {
+          setGeminiStatus('Gemini: locate off')
         }
 
         setActiveTab('current')
@@ -590,7 +605,7 @@ export const useDashboardState = ({ livePollingEnabled = true } = {}) => {
         return false
       }
     },
-    [addToast, refresh, scanStatus, trbRegistry],
+    [addToast, geminiLocate, refresh, scanStatus, trbRegistry],
   )
 
   const clearScan = useCallback(() => {
@@ -849,7 +864,9 @@ export const useDashboardState = ({ livePollingEnabled = true } = {}) => {
     taxonomyOpen,
     setTaxonomyOpen,
     geminiLocate,
+    setGeminiLocate,
     geminiStatus,
+    toggleGeminiLocate,
     exporting,
     exportRejectedToLearning,
     reviewing,
