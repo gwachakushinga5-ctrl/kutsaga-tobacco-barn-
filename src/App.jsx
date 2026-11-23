@@ -486,6 +486,8 @@ const Dashboard = ({ user, onSignOut }) => {
             launching={macro.launching}
             resumingId={macro.resumingId}
             error={macro.error}
+            backendDown={macro.backendDown}
+            onRetryBackend={macro.retryBackend}
             confidence={confidence}
             canLaunch={canLaunchMacro}
             restricted={!canLaunchMacro}
